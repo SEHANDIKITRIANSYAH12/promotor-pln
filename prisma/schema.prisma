@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model StandardKonstruksi {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  materials String   // JSON dictionary { materialName: qty }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GudangMaterial {
+  material    String   @id // Kode Material SAP
+  description String
+  sap         Float    @default(0)
+  fisik       Float    @default(0)
+  unit        String   @default("pcs")
+  keterangan  String?  @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Survey {
+  id                 String   @id // e.g. "SRV-0001"
+  status             String   @default("Draft") // Draft, Berjalan, Selesai, Historical, Ditolak
+  surveyor           String   @default("Surveyor 01")
+  customer           String   // JSON { idpel, name, address, daya, tarif, jenis }
+  technical          String   // JSON { pelangganKhusus, ulp, tipeGardu, kapasitasTrafo, jumlahKabelNaik, penyulang }
+  location           String   // JSON { address, lat, lng, photos: [] }
+  standardSelections String   // JSON [{ name, qty, note }]
+  materials          String   // JSON [{ code, name, unit, qty, note, sourceStandards: [] }]
+  sourceLegacy       Boolean  @default(false)
+  supersededBy       String?
+  daftungId          String?
+  created            String   // Date string YYYY-MM-DD
+  updated            String   // Date string YYYY-MM-DD
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Daftung {
+  id               String   @id @default(uuid()) // DT-xxxx or custom ID
+  idpel            String
+  nama             String
+  alamat           String?  @default("")
+  tarifLama        String?  @default("")
+  dayaLama         Float?   @default(0)
+  tarif            String?  @default("")
+  daya             Float?   @default(0)
+  jenisTransaksi   String?  @default("PASANG BARU")
+  woTiang          String?  @default("")
+  noWo             String?  @default("")
+  penyediaJasa     String?  @default("")
+  pengawas         String?  @default("")
+  tglBayar         String?  @default("")
+  durasiHariKerja  Int      @default(0)
+  kriteriaTmp      String?  @default("24 Hari")
+  statusPermohonan String?  @default("CETAK PK")
+  namaup           String?  @default("")
+  surveyId         String?  @default("")
+  sumber           String?  @default("SURVEY") // SURVEY | MANUAL
+  statusDaftung    String?  @default("Siap WO") // Siap WO | WO Proses | WO Selesai | Selesai
+  nidi             Boolean  @default(false)
+  slo              Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model WorkOrder {
+  noWo             String   @id // e.g. "WO-001" or "295.07.WO.2026"
+  namaPelanggan    String
+  vendor           String
+  pengawas         String
+  pengawas2        String?  @default("")
+  status           String   @default("Aktif") // Aktif | Selesai
+  ketKendala       String?  @default("")
+  daftungId        String?  @default("")
+  surveyId         String?  @default("")
+  idpel            String?  @default("")
+  kontrakJasa      String?  @default("")
+  nilaiJasa        Float?   @default(0)
+  vendorTiang      String?  @default("")
+  materials        String   // JSON [{ code, name, unit, required, reserved, verified, condition }]
+  jasaProgress     String   // JSON { tiang: bool, konstruksi: bool, penarikan: bool, kerangka: bool, trafo_app: bool }
+  jasaWeights      String   // JSON { tiang: 20, konstruksi: 20, ... }
+  tiangRows        String   // JSON [{ code, name, unit, qtySurvey, qtyWO, vendor, installedQty, verified }]
+  bast             String   // JSON { conditions: {}, asmanKonstruksi: "", asmanJaringan: "" }
+  vendorToken      String?  @default("")
+  vendorApproved   Boolean  @default(false)
+  vendorCatatan    String?  @default("")
+  tglPemeriksaanPengawas String? @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model KontrakJasa {
+  no          String   @id
+  pt          String
+  desc        String
+  awal        String
+  akhir       String
+  nilai       Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model KontrakMaterial {
+  no          String   @id
+  pt          String
+  desc        String
+  awal        String
+  akhir       String
+  nilai       Float    @default(0)
+  materials   String   // JSON [{ code, name, qty, unit, checked: bool }]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model VendorTiangMaster {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VendorPickupHistory {
+  id        String   @id @default(uuid())
+  date      String
+  woNo      String
+  vendor    String
+  material  String
+  qty       String
+  sj        String
+  verified  Boolean  @default(false)
+  proofName String?  @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
