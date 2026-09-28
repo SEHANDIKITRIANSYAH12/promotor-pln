@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
-  const { activeTab, loading, refreshData, currentUser, switchRole, availableUsers } = usePromotor();
+  const { activeTab, loading, isSyncing, refreshData, currentUser, switchRole, availableUsers } = usePromotor();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -67,6 +67,11 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
         <div>
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
             {current.title}
+            {isSyncing && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-600 border border-blue-100 animate-pulse">
+                Syncing...
+              </span>
+            )}
           </h1>
           <p className="text-xs text-slate-400 font-medium hidden sm:block">
             {current.subtitle}
@@ -79,10 +84,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
         <button
           type="button"
           onClick={() => refreshData()}
-          disabled={loading}
+          disabled={loading || isSyncing}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:text-pln-600 hover:border-pln-300 hover:bg-pln-50/50 text-xs font-semibold transition-all shadow-xs"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-pln-600' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-pln-600' : ''}`} />
           <span className="hidden sm:inline">Sync Data</span>
         </button>
 

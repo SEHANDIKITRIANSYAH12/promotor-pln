@@ -61,6 +61,7 @@ interface PromotorContextType {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   loading: boolean;
+  isSyncing: boolean;
   standards: StandardKonstruksiItem[];
   stdHeaders: string[];
   gudang: GudangMaterialRecord[];
@@ -80,7 +81,7 @@ interface PromotorContextType {
   canAccessTab: (tabId: string) => boolean;
 
   // Refresh data
-  refreshData: () => Promise<void>;
+  refreshData: (isInitial?: boolean) => Promise<void>;
 
   // Survey Actions
   saveSurvey: (record: SurveyRecord) => Promise<void>;
@@ -136,6 +137,7 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserProfile>(USERS_PRESET[0]);
   const [activeTab, setActiveTab] = useState<string>('std');
   const [loading, setLoading] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   const [standards, setStandards] = useState<StandardKonstruksiItem[]>([]);
   const [gudang, setGudang] = useState<GudangMaterialRecord[]>([]);
@@ -165,12 +167,64 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const applyData = (data: any) => {
+    if (!data) return;
+    const sortedStandards = (data.standards || []).sort((a: any, b: any) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    );
+    setStandards(sortedStandards);
+    setGudang(data.gudang || []);
+    setSurveys(data.surveys || []);
+    setDaftung(data.daftung || []);
+    setWorkorders(data.workorders || []);
+    setKontrakJasa(data.kontrakJasa || []);
+    setKontrakMaterial(data.kontrakMaterial || []);
+    setVendorTiangMaster(data.vendorTiang || []);
+    setPickupHistory(data.pickupHistory || []);
+  };
+
+  const refreshData = async (isInitial: boolean = false) => {
+    try {
+      setIsSyncing(true);
+      if (isInitial && standards.length === 0) {
+        setLoading(true);
+      }
+      const res = await fetch('/api/promotor', { cache: 'no-store' });
+      const json = await res.json();
+      if (json.success && json.data) {
+        applyData(json.data);
+        try {
+          localStorage.setItem('promotor_cached_v1', JSON.stringify(json.data));
+        } catch (_) {}
+      }
+    } catch (e) {
+      console.error('Failed to load data:', e);
+    } finally {
+      setLoading(false);
+      setIsSyncing(false);
+    }
+  };
+
   useEffect(() => {
+    // 1. Restore user role
     const savedRole = localStorage.getItem('promotor_user_role') as UserRole;
     if (savedRole && ROLE_PERMISSIONS[savedRole]) {
       const found = USERS_PRESET.find(u => u.role === savedRole);
       if (found) setCurrentUser(found);
     }
+
+    // 2. Instant cache hydration for 0ms initial load
+    try {
+      const cached = localStorage.getItem('promotor_cached_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        applyData(parsed);
+        setLoading(false);
+      }
+    } catch (_) {}
+
+    // 3. Silent revalidation in background
+    refreshData(true);
   }, []);
 
   // Unique standard material headers
@@ -181,36 +235,6 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
     });
     return Array.from(set);
   }, [standards]);
-
-  const refreshData = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/promotor');
-      const json = await res.json();
-      if (json.success && json.data) {
-        const sortedStandards = (json.data.standards || []).sort((a: any, b: any) =>
-          a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
-        );
-        setStandards(sortedStandards);
-        setGudang(json.data.gudang || []);
-        setSurveys(json.data.surveys || []);
-        setDaftung(json.data.daftung || []);
-        setWorkorders(json.data.workorders || []);
-        setKontrakJasa(json.data.kontrakJasa || []);
-        setKontrakMaterial(json.data.kontrakMaterial || []);
-        setVendorTiangMaster(json.data.vendorTiang || []);
-        setPickupHistory(json.data.pickupHistory || []);
-      }
-    } catch (e) {
-      console.error('Failed to load initial data:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    refreshData();
-  }, []);
 
   // Helpers & Calculations
   const matStock = (code: string) => {
