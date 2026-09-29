@@ -362,7 +362,7 @@ export const GudangModule: React.FC = () => {
                 <th className="p-3.5 text-center w-28">Stok Fisik</th>
                 <th className="p-3.5 text-center w-32">Rekonsiliasi</th>
                 <th className="p-3.5 text-center w-20">Satuan</th>
-                <th className="p-3.5 text-center w-28">Aksi</th>
+                <th className="p-3.5 text-center w-36">Kelola & Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -370,10 +370,17 @@ export const GudangModule: React.FC = () => {
                 filteredGudang.map(g => {
                   const selisih = (Number(g.fisik) || 0) - (Number(g.sap) || 0);
                   return (
-                    <tr key={g.material} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3.5 font-mono font-bold text-slate-900">{g.material}</td>
+                    <tr
+                      key={g.material}
+                      onClick={() => handleOpenEdit(g)}
+                      className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                      title="Klik baris untuk Kelola Stok & Rincian Material"
+                    >
+                      <td className="p-3.5 font-mono font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                        {g.material}
+                      </td>
                       <td className="p-3.5 font-medium text-slate-800">
-                        <div>{g.description}</div>
+                        <div className="group-hover:text-blue-900 transition-colors">{g.description}</div>
                         {g.keterangan && (
                           <div className="text-[10px] text-slate-400 mt-0.5 italic">{g.keterangan}</div>
                         )}
@@ -404,17 +411,24 @@ export const GudangModule: React.FC = () => {
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => handleOpenEdit(g)}
-                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-700 font-bold text-xs transition-colors border border-slate-200"
-                            title="Edit Stok & Data Material"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEdit(g);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs border border-blue-200 shadow-2xs transition-all hover:scale-[1.02]"
+                            title="Kelola & Edit Stok Material"
                           >
                             <Edit className="w-3.5 h-3.5" />
+                            <span>Kelola Stok</span>
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDeleteItem(g)}
-                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 font-bold text-xs transition-colors border border-slate-200"
-                            title="Hapus Material"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteItem(g);
+                            }}
+                            className="p-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 font-bold text-xs transition-colors border border-slate-200"
+                            title="Hapus Material dari Gudang"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
