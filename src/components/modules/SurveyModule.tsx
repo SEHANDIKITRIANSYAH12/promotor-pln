@@ -24,7 +24,12 @@ import {
   Building2,
   Trash2,
   Eye,
-  UserCheck
+  UserCheck,
+  Copy,
+  Check,
+  ExternalLink,
+  Printer,
+  FileText
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -56,6 +61,7 @@ export const SurveyModule: React.FC = () => {
 
   // Detail Modal
   const [detailSurvey, setDetailSurvey] = useState<SurveyRecord | null>(null);
+  const [copiedIdpel, setCopiedIdpel] = useState(false);
 
   // Category selection sub-modal inside Step 4
   const [catModalOpen, setCatModalOpen] = useState(false);
@@ -348,6 +354,35 @@ export const SurveyModule: React.FC = () => {
       }
     });
     showToast('Data Survey Pelanggan berhasil diexport ke PDF resmi!', 'success');
+  };
+
+  const handleExportSingleSurveyPdf = (s: SurveyRecord) => {
+    const headers = ['No', 'Kode Material', 'Nama Material / Komponen', 'Kebutuhan (Qty)', 'Satuan'];
+    const rows = s.materials.map((m, idx) => [
+      idx + 1,
+      m.code || '-',
+      m.name || m.code,
+      m.qty,
+      m.unit || 'pcs'
+    ]);
+
+    exportToPdf({
+      title: `LEMBAR HASIL SURVEY LAPANGAN · ${s.id}`,
+      subtitle: `Data Baseline Teknis Distribusi & Kebutuhan Material: ${s.customer.name}`,
+      filename: `HASIL_SURVEY_${s.id}_${s.customer.name.replace(/\s+/g, '_')}`,
+      orientation: 'portrait',
+      summaryCards: [
+        { label: 'IDPEL', value: s.customer.idpel || '-', color: [0, 156, 222] },
+        { label: 'Tarif / Daya', value: `${s.customer.tarif || '-'} / ${s.customer.daya ? `${s.customer.daya} VA` : '-'}`, color: [16, 185, 129] },
+        { label: 'Gardu / ULP', value: `${s.technical.tipeGardu || '-'} (${s.technical.ulp || 'RKB'})`, color: [245, 158, 11] },
+        { label: 'Total Material', value: `${s.materials.length} Item`, color: [100, 116, 139] }
+      ],
+      tableHeaders: headers,
+      tableData: rows,
+      signatureTitle: 'Petugas Surveyor Lapangan',
+      signatureName: s.surveyor || 'Petugas Survey PLN'
+    });
+    showToast(`Dokumen PDF Survey ${s.id} berhasil dicetak!`, 'success');
   };
 
   return (
@@ -1073,11 +1108,44 @@ export const SurveyModule: React.FC = () => {
         <Modal
           isOpen={!!detailSurvey}
           onClose={() => setDetailSurvey(null)}
-          title={`Detail Survey & Peta Lokasi · ${detailSurvey.id}`}
+          title={
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-100">
+                📍
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-extrabold text-slate-800">Detail Survey Lapangan</span>
+                  <span className="px-2 py-0.5 rounded-lg bg-blue-600 text-white font-mono font-bold text-xs">
+                    {detailSurvey.id}
+                  </span>
+                  <Badge
+                    variant={
+                      detailSurvey.status === 'Selesai'
+                        ? 'ok'
+                        : detailSurvey.status === 'Berjalan'
+                        ? 'info'
+                        : 'warn'
+                    }
+                  >
+                    {detailSurvey.status}
+                  </Badge>
+                  {detailSurvey.daftungId && (
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                      ✓ Sudah Masuk Daftung
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-400 font-normal">
+                  Tanggal Survey / Update: {detailSurvey.updated}
+                </div>
+              </div>
+            </div>
+          }
           maxWidth="4xl"
           footer={
-            <div className="flex items-center justify-between w-full">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+              <div className="flex items-center gap-2">
                 {detailSurvey.status === 'Selesai' && !detailSurvey.daftungId && (
                   <button
                     type="button"
@@ -1085,49 +1153,168 @@ export const SurveyModule: React.FC = () => {
                       moveSurveyToDaftung(detailSurvey.id);
                       setDetailSurvey(null);
                     }}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all"
                   >
                     <UserCheck className="w-4 h-4" />
                     <span>Masukkan ke Daftung</span>
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => handleExportSingleSurveyPdf(detailSurvey)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 border border-slate-200 transition-colors"
+                >
+                  <Printer className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Cetak PDF Survey</span>
+                </button>
               </div>
+
               <button
                 type="button"
                 onClick={() => setDetailSurvey(null)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
               >
                 Tutup
               </button>
             </div>
           }
         >
-          <div className="space-y-5 text-xs">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Pelanggan</span>
-                <span className="font-bold text-slate-800 text-sm mt-0.5 block">{detailSurvey.customer.name}</span>
+          <div className="space-y-4 text-xs">
+            {/* 2-Column Precision Profile Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Card 1: Data Pelanggan */}
+              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 space-y-2.5">
+                <div className="text-[11px] font-extrabold text-blue-700 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200/60 pb-2">
+                  <span>👤</span>
+                  <span>Data Calon Pelanggan</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Nama Pelanggan</span>
+                    <span className="font-bold text-slate-800 text-sm mt-0.5 block leading-tight">
+                      {detailSurvey.customer.name}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">IDPEL / No Registrasi</span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="font-mono font-bold text-blue-600 text-sm">
+                        {detailSurvey.customer.idpel || '-'}
+                      </span>
+                      {detailSurvey.customer.idpel && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(detailSurvey.customer.idpel || '');
+                            setCopiedIdpel(true);
+                            setTimeout(() => setCopiedIdpel(false), 2000);
+                            showToast('IDPEL berhasil disalin ke clipboard', 'info');
+                          }}
+                          className="p-1 rounded-md hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors"
+                          title="Salin IDPEL"
+                        >
+                          {copiedIdpel ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Tarif / Daya</span>
+                    <span className="font-bold text-slate-800 text-xs mt-0.5 block">
+                      {detailSurvey.customer.tarif} / {detailSurvey.customer.daya} VA
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Kontak / No. Telepon</span>
+                    <span className="font-medium text-slate-700 text-xs mt-0.5 block">
+                      {detailSurvey.customer.phone || '-'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Alamat Lokasi</span>
+                  <span className="font-medium text-slate-700 text-xs mt-0.5 block flex items-start gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                    <span>{detailSurvey.customer.address || '-'}</span>
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">IDPEL</span>
-                <span className="font-mono font-bold text-blue-600 text-sm mt-0.5 block">{detailSurvey.customer.idpel || '-'}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Tarif / Daya</span>
-                <span className="font-bold text-slate-800 text-sm mt-0.5 block">{detailSurvey.customer.tarif} / {detailSurvey.customer.daya} VA</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">ULP</span>
-                <span className="font-bold text-slate-800 text-sm mt-0.5 block">{detailSurvey.technical.ulp || '-'}</span>
+
+              {/* Card 2: Data Teknis & Surveyor */}
+              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 space-y-2.5">
+                <div className="text-[11px] font-extrabold text-blue-700 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200/60 pb-2">
+                  <span>⚡</span>
+                  <span>Parameter Teknis Distribusi</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Unit Layanan (ULP)</span>
+                    <span className="font-bold text-slate-800 text-sm mt-0.5 block">
+                      {detailSurvey.technical.ulp || 'ULP RANGKASBITUNG'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Petugas Surveyor</span>
+                    <span className="font-bold text-slate-800 text-sm mt-0.5 block">
+                      {detailSurvey.surveyor || '-'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Tipe Gardu</span>
+                    <span className="font-medium text-slate-700 text-xs mt-0.5 block">
+                      {detailSurvey.technical.tipeGardu || '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Penyulang / Trafo</span>
+                    <span className="font-medium text-slate-700 text-xs mt-0.5 block">
+                      {detailSurvey.technical.penyulang || '-'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Standar Konstruksi TM</span>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                    {detailSurvey.standardSelections && detailSurvey.standardSelections.length > 0 ? (
+                      detailSurvey.standardSelections.map((st, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 rounded-lg bg-blue-100/80 text-blue-800 font-bold text-[11px] border border-blue-200"
+                        >
+                          {st.name} <span className="text-blue-600 font-normal">({st.qty}x)</span>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-slate-400 italic">Tidak ada standar terpilih</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Interactive Map & Geotag Viewer */}
-            <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
-              <h4 className="font-extrabold text-slate-800 mb-3 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                <span>🗺️</span>
-                <span>Peta Titik Koordinat & Foto Geotagging</span>
-              </h4>
+            <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-xs space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🗺️</span>
+                  <span>Peta Titik Koordinat & Foto Geotagging</span>
+                </h4>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[11px] bg-slate-100 px-2.5 py-1 rounded-lg text-slate-700 font-semibold border border-slate-200">
+                    📍 {detailSurvey.location.lat || '-6.52414600'}, {detailSurvey.location.lng || '106.17685700'}
+                  </span>
+                </div>
+              </div>
+
               <MapLocationPicker
                 lat={detailSurvey.location.lat || '-6.52414600'}
                 lng={detailSurvey.location.lng || '106.17685700'}
@@ -1141,27 +1328,53 @@ export const SurveyModule: React.FC = () => {
             </div>
 
             {/* Materials List */}
-            <div>
-              <h4 className="font-extrabold text-slate-800 mb-2 text-xs uppercase tracking-wider">
-                Material Hasil Survey ({detailSurvey.materials.length} item)
-              </h4>
-              <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-52 overflow-y-auto shadow-xs">
+            <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <span>📦</span>
+                  <span>Material Hasil Survey & Kalkulasi Baseline</span>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">
+                    {detailSurvey.materials.length} Item Komponen
+                  </span>
+                </h4>
+                <span className="text-[11px] text-slate-400">
+                  Total Kuantitas: <b>{detailSurvey.materials.reduce((sum, m) => sum + (Number(m.qty) || 0), 0)}</b> unit
+                </span>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto shadow-inner">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 font-bold text-slate-600 sticky top-0 border-b">
+                  <thead className="bg-slate-100/80 font-bold text-slate-700 sticky top-0 border-b border-slate-200">
                     <tr>
-                      <th className="p-2.5">Material</th>
-                      <th className="p-2.5 text-center">Qty</th>
-                      <th className="p-2.5 text-center">Satuan</th>
+                      <th className="p-2.5 w-12 text-center">No</th>
+                      <th className="p-2.5">Kode Material</th>
+                      <th className="p-2.5">Deskripsi Komponen / Material</th>
+                      <th className="p-2.5 text-center w-24">Kebutuhan</th>
+                      <th className="p-2.5 text-center w-20">Satuan</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {detailSurvey.materials.map((m, i) => (
-                      <tr key={i} className="hover:bg-slate-50/50">
-                        <td className="p-2.5 font-bold text-slate-800">{m.name || m.code}</td>
-                        <td className="p-2.5 text-center font-bold font-mono text-blue-600">{m.qty}</td>
-                        <td className="p-2.5 text-center text-slate-500">{m.unit}</td>
+                    {detailSurvey.materials.length > 0 ? (
+                      detailSurvey.materials.map((m, i) => (
+                        <tr key={i} className="hover:bg-blue-50/30 transition-colors">
+                          <td className="p-2.5 text-center font-mono text-slate-400">{i + 1}</td>
+                          <td className="p-2.5 font-mono text-slate-600 font-medium">{m.code || '-'}</td>
+                          <td className="p-2.5 font-bold text-slate-800">{m.name || m.code}</td>
+                          <td className="p-2.5 text-center">
+                            <span className="px-2.5 py-0.5 rounded-md bg-blue-50 font-bold font-mono text-blue-700 text-xs border border-blue-100">
+                              {m.qty}
+                            </span>
+                          </td>
+                          <td className="p-2.5 text-center text-slate-500 font-medium">{m.unit || 'pcs'}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-slate-400 italic">
+                          Belum ada material terhitung pada survey ini
+                        </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>

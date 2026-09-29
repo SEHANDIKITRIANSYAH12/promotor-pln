@@ -43,6 +43,7 @@ export interface SurveyCustomer {
   daya?: number | string;
   tarif?: string;
   jenis?: string;
+  phone?: string;
 }
 
 export interface SurveyTechnical {

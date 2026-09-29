@@ -58,7 +58,7 @@ export const Modal: React.FC<ModalProps> = ({
     : 'items-center py-4';
 
   return (
-    <div className={clsx('fixed inset-0 z-50 flex justify-center p-3 sm:p-4 md:p-6 overflow-hidden', positionClasses)}>
+    <div className={clsx('fixed inset-0 z-50 flex justify-center p-3 sm:p-4 md:p-6 overflow-y-auto', positionClasses)}>
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
@@ -68,7 +68,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Modal Dialog Box */}
       <div
         className={clsx(
-          'relative w-full bg-white rounded-2xl shadow-2xl border border-slate-200/90 transform transition-all z-10 overflow-hidden flex flex-col max-h-[88vh] sm:max-h-[90vh] animate-fade-in',
+          'relative w-full my-auto bg-white rounded-2xl shadow-2xl border border-slate-200/90 transform transition-all z-10 overflow-hidden flex flex-col max-h-[88vh] sm:max-h-[90vh] animate-fade-in',
           maxWidthClasses[maxWidth]
         )}
       >
