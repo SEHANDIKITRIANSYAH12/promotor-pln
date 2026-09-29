@@ -1180,28 +1180,30 @@ export const SurveyModule: React.FC = () => {
             </div>
           }
         >
-          <div className="space-y-4 text-xs">
-            {/* 2-Column Precision Profile Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Card 1: Data Pelanggan */}
-              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 space-y-2.5">
-                <div className="text-[11px] font-extrabold text-blue-700 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200/60 pb-2">
-                  <span>👤</span>
-                  <span>Data Calon Pelanggan</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 text-xs">
+            {/* Left Column: Profil Pelanggan, Teknis, dan Tabel Material */}
+            <div className="lg:col-span-7 space-y-3 flex flex-col">
+              {/* Card 1: Data Pelanggan & Teknis (Sleek Compact Card) */}
+              <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/90 space-y-2.5">
+                <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                  <span className="text-[11px] font-extrabold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>👤</span>
+                    <span>Profil Calon Pelanggan</span>
+                  </span>
+                  <span className="font-mono text-slate-600 font-bold bg-white px-2 py-0.5 rounded border text-[11px]">
+                    {detailSurvey.customer.tarif || '-'} / {detailSurvey.customer.daya ? (Number(detailSurvey.customer.daya) >= 1000 ? `${(Number(detailSurvey.customer.daya) / 1000).toFixed(1)} kVA` : `${detailSurvey.customer.daya} VA`) : '-'}
+                  </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2.5">
+
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <span className="text-slate-400 block text-[10px] uppercase font-bold">Nama Pelanggan</span>
-                    <span className="font-bold text-slate-800 text-sm mt-0.5 block leading-tight">
-                      {detailSurvey.customer.name}
-                    </span>
+                    <span className="font-bold text-slate-800 text-sm block leading-tight">{detailSurvey.customer.name}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">IDPEL / No Registrasi</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">IDPEL / Registrasi</span>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="font-mono font-bold text-blue-600 text-sm">
-                        {detailSurvey.customer.idpel || '-'}
-                      </span>
+                      <span className="font-mono font-bold text-blue-600 text-sm">{detailSurvey.customer.idpel || '-'}</span>
                       {detailSurvey.customer.idpel && (
                         <button
                           type="button"
@@ -1211,7 +1213,7 @@ export const SurveyModule: React.FC = () => {
                             setTimeout(() => setCopiedIdpel(false), 2000);
                             showToast('IDPEL berhasil disalin ke clipboard', 'info');
                           }}
-                          className="p-1 rounded-md hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors"
+                          className="p-1 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors"
                           title="Salin IDPEL"
                         >
                           {copiedIdpel ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -1221,18 +1223,14 @@ export const SurveyModule: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/50">
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Tarif / Daya</span>
-                    <span className="font-bold text-slate-800 text-xs mt-0.5 block">
-                      {detailSurvey.customer.tarif} / {detailSurvey.customer.daya} VA
-                    </span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Unit Layanan (ULP)</span>
+                    <span className="font-bold text-slate-700 text-xs mt-0.5 block">{detailSurvey.technical.ulp || 'ULP Rangkasbitung'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Kontak / No. Telepon</span>
-                    <span className="font-medium text-slate-700 text-xs mt-0.5 block">
-                      {detailSurvey.customer.phone || '-'}
-                    </span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Petugas Surveyor</span>
+                    <span className="font-bold text-slate-700 text-xs mt-0.5 block">{detailSurvey.surveyor || '-'}</span>
                   </div>
                 </div>
 
@@ -1243,140 +1241,106 @@ export const SurveyModule: React.FC = () => {
                     <span>{detailSurvey.customer.address || '-'}</span>
                   </span>
                 </div>
-              </div>
 
-              {/* Card 2: Data Teknis & Surveyor */}
-              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 space-y-2.5">
-                <div className="text-[11px] font-extrabold text-blue-700 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200/60 pb-2">
-                  <span>⚡</span>
-                  <span>Parameter Teknis Distribusi</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Unit Layanan (ULP)</span>
-                    <span className="font-bold text-slate-800 text-sm mt-0.5 block">
-                      {detailSurvey.technical.ulp || 'ULP RANGKASBITUNG'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Petugas Surveyor</span>
-                    <span className="font-bold text-slate-800 text-sm mt-0.5 block">
-                      {detailSurvey.surveyor || '-'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5 pt-1">
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Tipe Gardu</span>
-                    <span className="font-medium text-slate-700 text-xs mt-0.5 block">
-                      {detailSurvey.technical.tipeGardu || '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Penyulang / Trafo</span>
-                    <span className="font-medium text-slate-700 text-xs mt-0.5 block">
-                      {detailSurvey.technical.penyulang || '-'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="pt-1">
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Standar Konstruksi TM</span>
-                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                <div className="pt-1 border-t border-slate-200/50">
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Standar Konstruksi TM Terpilih:</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {detailSurvey.standardSelections && detailSurvey.standardSelections.length > 0 ? (
                       detailSurvey.standardSelections.map((st, idx) => (
                         <span
                           key={idx}
-                          className="px-2 py-0.5 rounded-lg bg-blue-100/80 text-blue-800 font-bold text-[11px] border border-blue-200"
+                          className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-bold text-[10px] border border-blue-200"
                         >
                           {st.name} <span className="text-blue-600 font-normal">({st.qty}x)</span>
                         </span>
                       ))
                     ) : (
-                      <span className="text-slate-400 italic">Tidak ada standar terpilih</span>
+                      <span className="text-slate-400 italic">Tidak ada standar khusus</span>
                     )}
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Interactive Map & Geotag Viewer */}
-            <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-xs space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <span>🗺️</span>
-                  <span>Peta Titik Koordinat & Foto Geotagging</span>
-                </h4>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] bg-slate-100 px-2.5 py-1 rounded-lg text-slate-700 font-semibold border border-slate-200">
-                    📍 {detailSurvey.location.lat || '-6.52414600'}, {detailSurvey.location.lng || '106.17685700'}
+              {/* Card 2: Material List */}
+              <div className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-xs flex-1 flex flex-col min-h-0 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <span>📦</span>
+                    <span>Material Hasil Survey</span>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">
+                      {detailSurvey.materials.length} Item
+                    </span>
+                  </h4>
+                  <span className="text-[11px] text-slate-400">
+                    Total: <b>{detailSurvey.materials.reduce((sum, m) => sum + (Number(m.qty) || 0), 0)}</b> unit
                   </span>
                 </div>
-              </div>
 
-              <MapLocationPicker
-                lat={detailSurvey.location.lat || '-6.52414600'}
-                lng={detailSurvey.location.lng || '106.17685700'}
-                address={detailSurvey.customer.address}
-                customerName={detailSurvey.customer.name}
-                idpel={detailSurvey.customer.idpel}
-                photos={detailSurvey.location.photos || []}
-                readOnly={true}
-                onChangeCoords={() => {}}
-              />
+                <div className="border border-slate-200 rounded-xl overflow-hidden overflow-y-auto max-h-56 shadow-inner">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100/90 font-bold text-slate-700 sticky top-0 border-b border-slate-200">
+                      <tr>
+                        <th className="p-2 w-10 text-center">No</th>
+                        <th className="p-2">Deskripsi Material</th>
+                        <th className="p-2 text-center w-20">Kebutuhan</th>
+                        <th className="p-2 text-center w-16">Satuan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {detailSurvey.materials.length > 0 ? (
+                        detailSurvey.materials.map((m, i) => (
+                          <tr key={i} className="hover:bg-blue-50/30 transition-colors">
+                            <td className="p-2 text-center font-mono text-slate-400">{i + 1}</td>
+                            <td className="p-2">
+                              <div className="font-bold text-slate-800 leading-tight">{m.name || m.code}</div>
+                              {m.code && m.name && m.code !== m.name && (
+                                <div className="font-mono text-[10px] text-slate-400">{m.code}</div>
+                              )}
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className="px-2 py-0.5 rounded bg-blue-50 font-bold font-mono text-blue-700 text-xs border border-blue-100">
+                                {m.qty}
+                              </span>
+                            </td>
+                            <td className="p-2 text-center text-slate-500 font-medium">{m.unit || 'pcs'}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="p-4 text-center text-slate-400 italic">
+                            Belum ada material terhitung
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
-            {/* Materials List */}
-            <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-xs space-y-2.5">
-              <div className="flex items-center justify-between">
+            {/* Right Column: Peta Titik Koordinat & Foto Geotagging */}
+            <div className="lg:col-span-5 p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-xs flex flex-col space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 pb-2">
                 <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <span>📦</span>
-                  <span>Material Hasil Survey & Kalkulasi Baseline</span>
-                  <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">
-                    {detailSurvey.materials.length} Item Komponen
-                  </span>
+                  <span>🗺️</span>
+                  <span>Titik Koordinat & Peta</span>
                 </h4>
-                <span className="text-[11px] text-slate-400">
-                  Total Kuantitas: <b>{detailSurvey.materials.reduce((sum, m) => sum + (Number(m.qty) || 0), 0)}</b> unit
+                <span className="font-mono text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-semibold border border-slate-200">
+                  {detailSurvey.location.lat || '-6.52414600'}, {detailSurvey.location.lng || '106.17685700'}
                 </span>
               </div>
 
-              <div className="border border-slate-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto shadow-inner">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100/80 font-bold text-slate-700 sticky top-0 border-b border-slate-200">
-                    <tr>
-                      <th className="p-2.5 w-12 text-center">No</th>
-                      <th className="p-2.5">Kode Material</th>
-                      <th className="p-2.5">Deskripsi Komponen / Material</th>
-                      <th className="p-2.5 text-center w-24">Kebutuhan</th>
-                      <th className="p-2.5 text-center w-20">Satuan</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {detailSurvey.materials.length > 0 ? (
-                      detailSurvey.materials.map((m, i) => (
-                        <tr key={i} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="p-2.5 text-center font-mono text-slate-400">{i + 1}</td>
-                          <td className="p-2.5 font-mono text-slate-600 font-medium">{m.code || '-'}</td>
-                          <td className="p-2.5 font-bold text-slate-800">{m.name || m.code}</td>
-                          <td className="p-2.5 text-center">
-                            <span className="px-2.5 py-0.5 rounded-md bg-blue-50 font-bold font-mono text-blue-700 text-xs border border-blue-100">
-                              {m.qty}
-                            </span>
-                          </td>
-                          <td className="p-2.5 text-center text-slate-500 font-medium">{m.unit || 'pcs'}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={5} className="p-6 text-center text-slate-400 italic">
-                          Belum ada material terhitung pada survey ini
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="flex-1 min-h-0">
+                <MapLocationPicker
+                  lat={detailSurvey.location.lat || '-6.52414600'}
+                  lng={detailSurvey.location.lng || '106.17685700'}
+                  address={detailSurvey.customer.address}
+                  customerName={detailSurvey.customer.name}
+                  idpel={detailSurvey.customer.idpel}
+                  photos={detailSurvey.location.photos || []}
+                  readOnly={true}
+                  onChangeCoords={() => {}}
+                />
               </div>
             </div>
           </div>

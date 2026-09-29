@@ -156,35 +156,35 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       {/* VIEW 1: MAPS & COORDINATES */}
       {activeTab === 'map' && (
         <div className="space-y-3">
-          {/* Coordinates input controls */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                Latitude (Garis Lintang)
-              </label>
-              <input
-                type="text"
-                readOnly={readOnly}
-                value={lat || ''}
-                onChange={e => onChangeCoords(e.target.value, lng)}
-                placeholder="Contoh: -6.52414600"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50/50"
-              />
+          {/* Coordinates input controls (only in editable mode) */}
+          {!readOnly && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                  Latitude (Garis Lintang)
+                </label>
+                <input
+                  type="text"
+                  value={lat || ''}
+                  onChange={e => onChangeCoords(e.target.value, lng)}
+                  placeholder="Contoh: -6.52414600"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50/50"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                  Longitude (Garis Bujur)
+                </label>
+                <input
+                  type="text"
+                  value={lng || ''}
+                  onChange={e => onChangeCoords(lat, e.target.value)}
+                  placeholder="Contoh: 106.17685700"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50/50"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                Longitude (Garis Bujur)
-              </label>
-              <input
-                type="text"
-                readOnly={readOnly}
-                value={lng || ''}
-                onChange={e => onChangeCoords(lat, e.target.value)}
-                placeholder="Contoh: 106.17685700"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50/50"
-              />
-            </div>
-          </div>
+          )}
 
           {/* Error Banner & Permission Help */}
           {gpsError && (

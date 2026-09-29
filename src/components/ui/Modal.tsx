@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -25,6 +25,8 @@ export const Modal: React.FC<ModalProps> = ({
   closeOnBackdropClick = false,
   position = 'center',
 }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -32,6 +34,10 @@ export const Modal: React.FC<ModalProps> = ({
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
+      // Ensure body always starts at the top
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = 0;
+      }
     } else {
       document.body.style.overflow = 'unset';
     }
@@ -53,51 +59,61 @@ export const Modal: React.FC<ModalProps> = ({
     '6xl': 'max-w-6xl',
   };
 
-  const positionClasses = position === 'top'
-    ? 'items-start pt-3 sm:pt-6 md:pt-8 pb-4'
-    : 'items-center py-4';
-
   return (
-    <div className={clsx('fixed inset-0 z-50 flex justify-center p-3 sm:p-4 md:p-6 overflow-y-auto', positionClasses)}>
+    <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
         onClick={closeOnBackdropClick ? onClose : undefined}
       />
 
-      {/* Modal Dialog Box */}
+      {/* Alignment Container */}
       <div
         className={clsx(
-          'relative w-full my-auto bg-white rounded-2xl shadow-2xl border border-slate-200/90 transform transition-all z-10 overflow-hidden flex flex-col max-h-[88vh] sm:max-h-[90vh] animate-fade-in',
-          maxWidthClasses[maxWidth]
+          'flex min-h-full justify-center p-2.5 sm:p-4 md:p-6 text-center',
+          position === 'top' ? 'items-start pt-3 sm:pt-6' : 'items-center'
         )}
       >
-        {/* Header (Always Fixed at Top) */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-slate-200 bg-slate-50/90 shrink-0">
-          <div className="text-base font-bold text-slate-800 flex items-center gap-2">
-            {title}
+        {/* Modal Dialog Box */}
+        <div
+          className={clsx(
+            'relative w-full text-left bg-white rounded-2xl shadow-2xl border border-slate-200/90 transform transition-all z-10 overflow-hidden flex flex-col',
+            'max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)]',
+            'animate-fade-in',
+            maxWidthClasses[maxWidth]
+          )}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header (Always Fixed at Top, never shrinks) */}
+          <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-slate-200 bg-slate-50/95 shrink-0">
+            <div className="text-base font-bold text-slate-800 flex items-center gap-2 flex-1 min-w-0 pr-2">
+              {title}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors shrink-0"
+              title="Tutup Form (Esc)"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
-            title="Tutup Form (Esc)"
+
+          {/* Scrollable Body Area (Takes remaining height, scrolls smoothly) */}
+          <div
+            ref={scrollRef}
+            className="px-5 sm:px-6 py-4 sm:py-5 overflow-y-auto modal-scroll-area flex-1 min-h-0 text-slate-700 text-sm"
           >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Scrollable Body Area */}
-        <div className="px-5 sm:px-6 py-4 sm:py-5 overflow-y-auto modal-scroll-area flex-1 min-h-0 text-slate-700 text-sm">
-          {children}
-        </div>
-
-        {/* Footer (Always Fixed & Docked at Bottom) */}
-        {footer && (
-          <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-3 border-t border-slate-200 bg-slate-50 shrink-0 shadow-xs">
-            {footer}
+            {children}
           </div>
-        )}
+
+          {/* Footer (Always Fixed & Docked at Bottom, shrink-0, guaranteed visible) */}
+          {footer && (
+            <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-3 border-t border-slate-200 bg-slate-50 shrink-0 shadow-xs">
+              {footer}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
