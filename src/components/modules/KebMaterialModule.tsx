@@ -3,6 +3,9 @@
 import React, { useState, useMemo } from 'react';
 import { usePromotor } from '@/context/PromotorContext';
 import { Badge } from '@/components/ui/Badge';
+import { useToast } from '@/components/ui/Toast';
+import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import {
   BarChart3,
   Search,
@@ -17,6 +20,7 @@ import * as XLSX from 'xlsx';
 
 export const KebMaterialModule: React.FC = () => {
   const { workorders, matStock, transitMaterialMap, totalTransit } = usePromotor();
+  const { showToast } = useToast();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'ok' | 'warn' | 'bad'>('all');
 
@@ -94,23 +98,82 @@ export const KebMaterialModule: React.FC = () => {
 
   const handleExportExcel = () => {
     const data = filteredAnalysis.map(m => ({
-      'KODE MATERIAL': m.code,
-      'DESKRIPSI MATERIAL': m.name,
-      'SATUAN': m.unit,
-      'KEBUTUHAN WO': m.woNeed,
-      'SUDAH RESERVASI': m.reserved,
-      'SISA KEBUTUHAN': m.remaining,
-      'STOK FISIK': m.stock,
-      'AVAILABLE STOK': m.available,
-      'MATERIAL IN TRANSIT': m.inTransit,
-      'KEKURANGAN (GAP)': m.gap,
-      'STATUS': m.status === 'ok' ? 'CUKUP' : m.status === 'warn' ? 'KURANG / MENIPIS' : 'HABIS / TIDAK CUKUP'
+      code: m.code,
+      name: m.name,
+      unit: m.unit,
+      woNeed: m.woNeed,
+      reserved: m.reserved,
+      remaining: m.remaining,
+      stock: m.stock,
+      available: m.available,
+      inTransit: m.inTransit,
+      gap: m.gap,
+      status: m.status === 'ok' ? 'CUKUP (AMAN)' : m.status === 'warn' ? 'MENIPIS' : 'DEFISIT / HABIS'
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'KEBUTUHAN_MATERIAL');
-    XLSX.writeFile(wb, 'ANALISIS_KEBUTUHAN_MATERIAL.xlsx');
+    exportToExcel({
+      filename: `LAPORAN_KEBUTUHAN_MATERIAL_PLN_${new Date().toISOString().split('T')[0]}`,
+      sheetName: 'KEBUTUHAN_MATERIAL',
+      columns: [
+        { header: 'KODE SAP', key: 'code', width: 14 },
+        { header: 'DESKRIPSI MATERIAL', key: 'name', width: 35 },
+        { header: 'SATUAN', key: 'unit', width: 10 },
+        { header: 'TOTAL BUTUH WO', key: 'woNeed', width: 16 },
+        { header: 'RESERVASI', key: 'reserved', width: 14 },
+        { header: 'SISA BUTUH', key: 'remaining', width: 14 },
+        { header: 'STOK FISIK', key: 'stock', width: 14 },
+        { header: 'STOK TERSEDIA', key: 'available', width: 14 },
+        { header: 'IN-TRANSIT', key: 'inTransit', width: 14 },
+        { header: 'KEKURANGAN (GAP)', key: 'gap', width: 16 },
+        { header: 'STATUS KETERSEDIAAN', key: 'status', width: 20 }
+      ],
+      data
+    });
+    showToast('Analisis Kebutuhan Material berhasil diexport ke Excel!', 'success');
+  };
+
+  const handleExportPdf = () => {
+    const data = filteredAnalysis.map((m, idx) => ({
+      no: idx + 1,
+      code: m.code,
+      name: m.name,
+      butuh: `${m.woNeed} ${m.unit}`,
+      stok: `${m.stock} ${m.unit}`,
+      transit: `${m.inTransit} ${m.unit}`,
+      gap: m.gap > 0 ? `-${m.gap} ${m.unit}` : '0',
+      status: m.status === 'ok' ? 'Cukup' : m.status === 'warn' ? 'Menipis' : 'Defisit'
+    }));
+
+    exportToPdf({
+      filename: `LAPORAN_ANALISIS_DEFISIT_MATERIAL_PLN_${new Date().toISOString().split('T')[0]}`,
+      title: 'LAPORAN ANALISIS KEBUTUHAN & DEFISIT MATERIAL WORK ORDER',
+      subtitle: 'Komparasi Kebutuhan Proyek Aktif vs Stok Fisik Gudang & Alokasi Kontrak Pengadaan (In-Transit)',
+      unit: 'PLN ULP RANGKASBITUNG',
+      orientation: 'landscape',
+      columns: [
+        { header: 'No', dataKey: 'no' },
+        { header: 'Kode SAP', dataKey: 'code' },
+        { header: 'Deskripsi Material', dataKey: 'name' },
+        { header: 'Kebutuhan WO', dataKey: 'butuh' },
+        { header: 'Stok Fisik', dataKey: 'stok' },
+        { header: 'In-Transit', dataKey: 'transit' },
+        { header: 'Kekurangan (GAP)', dataKey: 'gap' },
+        { header: 'Status', dataKey: 'status' }
+      ],
+      data,
+      summaryStats: [
+        { label: 'Total Item Komponen', value: `${materialAnalysis.length} Item` },
+        { label: 'Stok Aman (Cukup)', value: `${countOk} Item` },
+        { label: 'Stok Menipis', value: `${countWarn} Item` },
+        { label: 'Defisit / Perlu PO', value: `${countBad} Item` }
+      ],
+      signer: {
+        name: 'Supervisor Logistik & Gudang',
+        title: 'Pengelola Material & Logistik',
+        unit: 'PT PLN (Persero) ULP Rangkasbitung'
+      }
+    });
+    showToast('Analisis Kebutuhan Material berhasil diexport ke PDF resmi!', 'success');
   };
 
   return (
@@ -293,14 +356,11 @@ export const KebMaterialModule: React.FC = () => {
               />
             </div>
 
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Excel</span>
-            </button>
+            <ExportDropdown
+              onExportExcel={handleExportExcel}
+              onExportPdf={handleExportPdf}
+              label="Export Kebutuhan"
+            />
           </div>
         </div>
 

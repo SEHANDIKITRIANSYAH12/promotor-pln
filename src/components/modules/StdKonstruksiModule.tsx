@@ -5,6 +5,8 @@ import { usePromotor } from '@/context/PromotorContext';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
+import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import { Search, Upload, Download, Check, Layers, AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -48,6 +50,10 @@ export const StdKonstruksiModule: React.FC = () => {
   };
 
   const handleExportExcel = () => {
+    if (standards.length === 0) {
+      showToast('Tidak ada data Standar Konstruksi untuk diexport', 'warn');
+      return;
+    }
     const data = standards.map(s => {
       const row: Record<string, any> = { 'KATEGORI KONSTRUKSI TM': s.name };
       stdHeaders.forEach(h => {
@@ -57,10 +63,41 @@ export const StdKonstruksiModule: React.FC = () => {
       return row;
     });
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'STD_KONSTRUKSI');
-    XLSX.writeFile(wb, 'STD_KONSTRUKSI_TM.xlsx');
+    exportToExcel(data, `STANDAR_KONSTRUKSI_TM_PLN_${new Date().toISOString().slice(0, 10)}`, 'STD_KONSTRUKSI');
+    showToast('Berhasil mengexport Standar Konstruksi ke Excel', 'success');
+  };
+
+  const handleExportPdf = () => {
+    if (standards.length === 0) {
+      showToast('Tidak ada data Standar Konstruksi untuk diexport', 'warn');
+      return;
+    }
+    const displayedHeaders = stdHeaders.slice(0, 10);
+    const headers = ['No', 'Kategori Konstruksi TM', ...displayedHeaders, 'Status'];
+    const rows = filteredStandards.map((s, index) => [
+      index + 1,
+      s.name,
+      ...displayedHeaders.map(h => s.materials[h] || 0),
+      s.active ? 'Aktif' : 'Non-Aktif'
+    ]);
+
+    exportToPdf({
+      title: 'STANDAR KEBUTUHAN MATERIAL KONSTRUKSI TM',
+      subtitle: 'Standar Komponen Material Per Kategori Konstruksi Jaringan Tegangan Menengah',
+      filename: `STANDAR_KONSTRUKSI_TM_PLN_${new Date().toISOString().slice(0, 10)}`,
+      orientation: 'landscape',
+      summaryCards: [
+        { label: 'Total Kategori TM', value: standards.length, color: [0, 156, 222] },
+        { label: 'Kategori Aktif', value: activeCount, color: [16, 185, 129] },
+        { label: 'Kategori Non-Aktif', value: inactiveCount, color: [239, 68, 68] },
+        { label: 'Master Material', value: stdHeaders.length, color: [100, 116, 139] }
+      ],
+      tableHeaders: headers,
+      tableData: rows,
+      signatureTitle: 'Manager ULP Rangkasbitung',
+      signatureName: 'SEHAN DIKI TRIANSYAH'
+    });
+    showToast('Berhasil membuat PDF Standar Konstruksi TM', 'success');
   };
 
   const handleImportExcel = async () => {
@@ -203,14 +240,11 @@ export const StdKonstruksiModule: React.FC = () => {
               <span>Upload Excel</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Excel</span>
-            </button>
+            <ExportDropdown
+              onExportExcel={handleExportExcel}
+              onExportPdf={handleExportPdf}
+              label="Export Standar"
+            />
           </div>
         </div>
 

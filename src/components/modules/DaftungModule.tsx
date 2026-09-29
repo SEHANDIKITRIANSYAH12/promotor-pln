@@ -6,6 +6,8 @@ import { DaftungRecord, WorkOrderRecord } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
+import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import {
   Users,
   Plus,
@@ -237,24 +239,105 @@ export const DaftungModule: React.FC = () => {
   };
 
   const handleExportExcel = () => {
-    const data = filteredDaftung.map(r => ({
-      'IDPEL': r.idpel,
-      'NAMA PELANGGAN': r.nama,
-      'ALAMAT': r.alamat || '-',
-      'ID SURVEY': r.surveyId || 'MANUAL',
-      'TGL BAYAR': r.tglBayar || '-',
-      'DURASI (HARI)': r.durasiHariKerja,
-      'KRITERIA TMP': r.kriteriaTmp || '-',
-      'NO WO': r.noWo || '-',
-      'STATUS PEKERJAAN': getMonitoringStatus(r),
-      'NIDI': r.nidi ? 'Sudah' : 'Belum',
-      'SLO': r.slo ? 'Sudah' : 'Belum'
-    }));
+    const data = filteredDaftung.map(r => {
+      const sla = getSlaInfo(r);
+      const remainingStr = sla.remaining !== null
+        ? sla.remaining < 0 ? `Lewat ${Math.abs(sla.remaining)} Hari` : `Sisa ${sla.remaining} Hari`
+        : 'Tanpa Target';
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'DAFTUNG_MONITORING');
-    XLSX.writeFile(wb, 'DAFTUNG_MONITORING_SLA.xlsx');
+      return {
+        idpel: r.idpel,
+        nama: r.nama,
+        alamat: r.alamat || '-',
+        tarifDaya: `${r.tarif || '-'} / ${r.daya ? (r.daya >= 1000 ? `${(r.daya / 1000).toFixed(1)} kVA` : `${r.daya} VA`) : '-'}`,
+        surveyId: r.surveyId || 'MANUAL',
+        tglBayar: r.tglBayar || '-',
+        durasiHariKerja: `${r.durasiHariKerja} Hari`,
+        kriteriaTmp: r.kriteriaTmp || '-',
+        statusSla: remainingStr,
+        noWo: r.noWo || 'Belum Terbit',
+        penyediaJasa: r.penyediaJasa || '-',
+        pengawas: r.pengawas || '-',
+        statusPekerjaan: getMonitoringStatus(r),
+        nidiSlo: `NIDI: ${r.nidi ? '✓' : '✗'} | SLO: ${r.slo ? '✓' : '✗'}`
+      };
+    });
+
+    exportToExcel({
+      filename: `LAPORAN_DAFTUNG_SLA_PLN_${new Date().toISOString().split('T')[0]}`,
+      sheetName: 'DAFTUNG_SLA',
+      columns: [
+        { header: 'IDPEL', key: 'idpel', width: 16 },
+        { header: 'NAMA PELANGGAN', key: 'nama', width: 28 },
+        { header: 'ALAMAT', key: 'alamat', width: 35 },
+        { header: 'TARIF / DAYA', key: 'tarifDaya', width: 16 },
+        { header: 'ID SURVEY', key: 'surveyId', width: 14 },
+        { header: 'TGL BAYAR', key: 'tglBayar', width: 14 },
+        { header: 'DURASI KERJA', key: 'durasiHariKerja', width: 14 },
+        { header: 'TARGET TMP', key: 'kriteriaTmp', width: 16 },
+        { header: 'STATUS SLA', key: 'statusSla', width: 16 },
+        { header: 'NO WO', key: 'noWo', width: 18 },
+        { header: 'VENDOR JASA', key: 'penyediaJasa', width: 25 },
+        { header: 'PENGAWAS', key: 'pengawas', width: 20 },
+        { header: 'STATUS PEKERJAAN', key: 'statusPekerjaan', width: 20 },
+        { header: 'LEGALITAS NIDI/SLO', key: 'nidiSlo', width: 20 }
+      ],
+      data
+    });
+    showToast('Laporan Daftung & SLA berhasil diexport ke Excel!', 'success');
+  };
+
+  const handleExportPdf = () => {
+    const data = filteredDaftung.map((r, idx) => {
+      const sla = getSlaInfo(r);
+      const remainingStr = sla.remaining !== null
+        ? sla.remaining < 0 ? `Lewat ${Math.abs(sla.remaining)} Hari` : `Sisa ${sla.remaining} Hari`
+        : '-';
+
+      return {
+        no: idx + 1,
+        idpel: r.idpel,
+        nama: r.nama,
+        tarifDaya: `${r.tarif || '-'} / ${r.daya ? (r.daya >= 1000 ? `${(r.daya / 1000).toFixed(1)}k` : r.daya) : '-'}`,
+        surveyWo: r.noWo ? r.noWo : (r.surveyId || 'Manual'),
+        durasi: `${r.durasiHariKerja} hr`,
+        tmpSla: `${r.kriteriaTmp || '-'} (${remainingStr})`,
+        pic: r.pengawas || r.penyediaJasa || '-',
+        status: getMonitoringStatus(r)
+      };
+    });
+
+    exportToPdf({
+      filename: `LAPORAN_DAFTUNG_MONITORING_SLA_PLN_${new Date().toISOString().split('T')[0]}`,
+      title: 'LAPORAN MONITORING DAFTAR TUNGGU (DAFTUNG) & TINGKAT MUTU PELAYANAN (SLA)',
+      subtitle: 'Monitoring Realisasi Hari Kerja, Target TMP, dan Status Penerbitan Perintah Kerja (WO)',
+      unit: 'PLN ULP RANGKASBITUNG',
+      orientation: 'landscape',
+      columns: [
+        { header: 'No', dataKey: 'no' },
+        { header: 'IDPEL', dataKey: 'idpel' },
+        { header: 'Nama Pelanggan', dataKey: 'nama' },
+        { header: 'Tarif/Daya', dataKey: 'tarifDaya' },
+        { header: 'No WO / Survey', dataKey: 'surveyWo' },
+        { header: 'Durasi', dataKey: 'durasi' },
+        { header: 'Target TMP & SLA', dataKey: 'tmpSla' },
+        { header: 'Pengawas / Vendor', dataKey: 'pic' },
+        { header: 'Status Pekerjaan', dataKey: 'status' }
+      ],
+      data,
+      summaryStats: [
+        { label: 'Total Daftung', value: `${daftung.length} Pelanggan` },
+        { label: 'Siap Terbit WO', value: `${daftung.filter(d => !d.noWo).length} Antrian` },
+        { label: 'WO Berjalan', value: `${daftung.filter(d => d.noWo).length} Proyek` },
+        { label: 'Kritis / Lewat SLA', value: `${slaStats.over + slaStats.near} Pelanggan` }
+      ],
+      signer: {
+        name: 'Manager ULP Rangkasbitung',
+        title: 'Manager Unit Layanan Pelanggan',
+        unit: 'PT PLN (Persero) UID Banten'
+      }
+    });
+    showToast('Laporan Daftung & SLA berhasil diexport ke PDF resmi!', 'success');
   };
 
   return (
@@ -448,14 +531,11 @@ export const DaftungModule: React.FC = () => {
               />
             </div>
 
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Excel</span>
-            </button>
+            <ExportDropdown
+              onExportExcel={handleExportExcel}
+              onExportPdf={handleExportPdf}
+              label="Export Daftung & SLA"
+            />
           </div>
         </div>
 

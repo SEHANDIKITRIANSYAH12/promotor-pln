@@ -8,6 +8,8 @@ import { Modal } from '@/components/ui/Modal';
 import { MapLocationPicker } from '@/components/ui/MapLocationPicker';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import {
   Plus,
   Search,
@@ -266,22 +268,86 @@ export const SurveyModule: React.FC = () => {
 
   const handleExportExcel = () => {
     const data = displayedSurveys.map(s => ({
-      'ID SURVEY': s.id,
-      'NAMA PELANGGAN': s.customer.name,
-      'IDPEL': s.customer.idpel || '-',
-      'SURVEYOR': s.surveyor,
-      'STATUS': s.status,
-      'TIPE GARDU': s.technical.tipeGardu || '-',
-      'DAYA (VA)': s.customer.daya || '-',
-      'TARIF': s.customer.tarif || '-',
-      'TOTAL MATERIAL': s.materials.length,
-      'TANGGAL': s.updated
+      id: s.id,
+      nama: s.customer.name,
+      idpel: s.customer.idpel || '-',
+      alamat: s.customer.address || '-',
+      surveyor: s.surveyor,
+      status: s.status,
+      tipeGardu: s.technical.tipeGardu || '-',
+      dayaTarif: `${s.customer.tarif || '-'} / ${s.customer.daya ? `${s.customer.daya} VA` : '-'}`,
+      standar: s.standardSelections.map(st => `${st.name} (${st.qty})`).join(', ') || '-',
+      totalMaterial: `${s.materials.length} Item`,
+      lokasi: s.location.lat && s.location.lng ? `${s.location.lat}, ${s.location.lng}` : '-',
+      tanggal: s.updated
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'SURVEY');
-    XLSX.writeFile(wb, 'DATA_SURVEY_PELANGGAN.xlsx');
+    exportToExcel({
+      filename: `LAPORAN_SURVEY_PELANGGAN_PLN_${new Date().toISOString().split('T')[0]}`,
+      sheetName: 'SURVEY_PELANGGAN',
+      columns: [
+        { header: 'ID SURVEY', key: 'id', width: 14 },
+        { header: 'NAMA PELANGGAN', key: 'nama', width: 28 },
+        { header: 'IDPEL', key: 'idpel', width: 16 },
+        { header: 'ALAMAT', key: 'alamat', width: 35 },
+        { header: 'SURVEYOR', key: 'surveyor', width: 18 },
+        { header: 'STATUS', key: 'status', width: 14 },
+        { header: 'TIPE GARDU', key: 'tipeGardu', width: 15 },
+        { header: 'TARIF / DAYA', key: 'dayaTarif', width: 16 },
+        { header: 'STANDAR TERPILIH', key: 'standar', width: 25 },
+        { header: 'JUMLAH MATERIAL', key: 'totalMaterial', width: 16 },
+        { header: 'KOORDINAT GPS', key: 'lokasi', width: 25 },
+        { header: 'TANGGAL SURVEY', key: 'tanggal', width: 15 }
+      ],
+      data
+    });
+    showToast('Data Survey Pelanggan berhasil diexport ke Excel!', 'success');
+  };
+
+  const handleExportPdf = () => {
+    const data = displayedSurveys.map((s, idx) => ({
+      no: idx + 1,
+      id: s.id,
+      nama: s.customer.name,
+      idpel: s.customer.idpel || '-',
+      dayaTarif: `${s.customer.tarif || '-'} / ${s.customer.daya ? (Number(s.customer.daya) >= 1000 ? `${(Number(s.customer.daya) / 1000).toFixed(1)} kVA` : `${s.customer.daya} VA`) : '-'}`,
+      tipeGardu: s.technical.tipeGardu || '-',
+      surveyor: s.surveyor,
+      totalMat: `${s.materials.length} item`,
+      status: s.status
+    }));
+
+    exportToPdf({
+      filename: `LAPORAN_SURVEY_PELANGGAN_PLN_${new Date().toISOString().split('T')[0]}`,
+      title: 'LAPORAN HASIL SURVEY LAPANGAN & KALKULASI KEBUTUHAN MATERIAL',
+      subtitle: 'Data Calon Pelanggan, Baseline Teknis Distribusi, dan Standarisasi Konstruksi Saluran TM',
+      unit: 'PLN ULP RANGKASBITUNG',
+      orientation: 'landscape',
+      columns: [
+        { header: 'No', dataKey: 'no' },
+        { header: 'ID Survey', dataKey: 'id' },
+        { header: 'Nama Pelanggan', dataKey: 'nama' },
+        { header: 'IDPEL', dataKey: 'idpel' },
+        { header: 'Tarif/Daya', dataKey: 'dayaTarif' },
+        { header: 'Tipe Gardu', dataKey: 'tipeGardu' },
+        { header: 'Petugas Surveyor', dataKey: 'surveyor' },
+        { header: 'Komp. Material', dataKey: 'totalMat' },
+        { header: 'Status', dataKey: 'status' }
+      ],
+      data,
+      summaryStats: [
+        { label: 'Total Survey', value: `${surveys.length} Lokasi` },
+        { label: 'Survey Aktif', value: `${activeSurveys.length} Lokasi` },
+        { label: 'Siap Masuk Daftung', value: `${readyForDaftung.length} Survey` },
+        { label: 'Total Material Terhitung', value: `${totalMaterialSurvey} Item` }
+      ],
+      signer: {
+        name: 'Supervisor Perencanaan & Survey',
+        title: 'Koordinator Survey Lapangan',
+        unit: 'PT PLN (Persero) ULP Rangkasbitung'
+      }
+    });
+    showToast('Data Survey Pelanggan berhasil diexport ke PDF resmi!', 'success');
   };
 
   return (
@@ -381,14 +447,11 @@ export const SurveyModule: React.FC = () => {
               />
             </div>
 
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Excel</span>
-            </button>
+            <ExportDropdown
+              onExportExcel={handleExportExcel}
+              onExportPdf={handleExportPdf}
+              label="Export Survey"
+            />
           </div>
         </div>
 

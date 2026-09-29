@@ -5,6 +5,9 @@ import { usePromotor } from '@/context/PromotorContext';
 import { KontrakJasaRecord, KontrakMaterialRecord, KontrakMaterialItem } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
+import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import {
   FileSignature,
   Search,
@@ -19,7 +22,6 @@ import {
   Edit,
   Trash2
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 export const KontrakModule: React.FC = () => {
   const {
@@ -34,6 +36,7 @@ export const KontrakModule: React.FC = () => {
     saveKontrakMaterial,
     toggleKontrakMaterialCheck
   } = usePromotor();
+  const { showToast } = useToast();
 
   const [activeSubTab, setActiveSubTab] = useState<'jasa' | 'material'>('jasa');
   const [search, setSearch] = useState('');
@@ -83,37 +86,116 @@ export const KontrakModule: React.FC = () => {
 
   const handleExportExcel = () => {
     if (activeSubTab === 'jasa') {
-      const data = filteredJasa.map(c => ({
+      if (filteredJasa.length === 0) {
+        showToast('Tidak ada data Kontrak Jasa untuk diexport', 'warn');
+        return;
+      }
+      const data = filteredJasa.map((c, index) => ({
+        'NO': index + 1,
         'NOMOR SPK': c.no,
-        'NAMA PT': c.pt,
-        'DESKRIPSI': c.desc,
+        'NAMA VENDOR / PT': c.pt,
+        'DESKRIPSI KONTRAK': c.desc,
         'TGL AWAL': c.awal,
         'TGL AKHIR': c.akhir,
-        'NILAI PAGU': c.nilai,
-        'TERPAKAI WO': jasaTerpakai(c.no),
-        'SISA NILAI': jasaSisa(c),
+        'NILAI PAGU (RP)': Number(c.nilai) || 0,
+        'TERPAKAI WO (RP)': jasaTerpakai(c.no),
+        'SISA NILAI (RP)': jasaSisa(c),
         'STATUS': contractDateStatus(c.awal, c.akhir)
       }));
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'KONTRAK_JASA');
-      XLSX.writeFile(wb, 'DATA_KONTRAK_JASA.xlsx');
+      exportToExcel(data, `LAPORAN_KONTRAK_JASA_PLN_${new Date().toISOString().slice(0, 10)}`, 'KONTRAK_JASA');
+      showToast('Berhasil mengexport data Kontrak Jasa ke Excel', 'success');
     } else {
-      const data = filteredMaterial.map(c => ({
+      if (filteredMaterial.length === 0) {
+        showToast('Tidak ada data Kontrak Material untuk diexport', 'warn');
+        return;
+      }
+      const data = filteredMaterial.map((c, index) => ({
+        'NO': index + 1,
         'NOMOR SPK': c.no,
-        'NAMA PT': c.pt,
+        'SUPPLIER / PT': c.pt,
         'DESKRIPSI': c.desc,
         'TGL AWAL': c.awal,
         'TGL AKHIR': c.akhir,
-        'NILAI': c.nilai,
+        'NILAI (RP)': Number(c.nilai) || 0,
         'JUMLAH ITEM': c.materials.length,
         'IN TRANSIT': c.materials.filter(m => !m.checked).reduce((s, m) => s + (Number(m.qty) || 0), 0),
         'STATUS': contractDateStatus(c.awal, c.akhir)
       }));
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'KONTRAK_MATERIAL');
-      XLSX.writeFile(wb, 'DATA_KONTRAK_MATERIAL.xlsx');
+      exportToExcel(data, `LAPORAN_KONTRAK_MATERIAL_PLN_${new Date().toISOString().slice(0, 10)}`, 'KONTRAK_MATERIAL');
+      showToast('Berhasil mengexport data Kontrak Material ke Excel', 'success');
+    }
+  };
+
+  const handleExportPdf = () => {
+    if (activeSubTab === 'jasa') {
+      if (filteredJasa.length === 0) {
+        showToast('Tidak ada data Kontrak Jasa untuk diexport', 'warn');
+        return;
+      }
+      const headers = ['No', 'Nomor SPK', 'Vendor / Pelaksana', 'Deskripsi', 'Masa Berlaku', 'Nilai Pagu', 'Terpakai WO', 'Sisa Nilai', 'Status'];
+      const rows = filteredJasa.map((c, index) => [
+        index + 1,
+        c.no,
+        c.pt,
+        c.desc,
+        `${c.awal} s/d ${c.akhir}`,
+        `Rp ${(Number(c.nilai) || 0).toLocaleString('id-ID')}`,
+        `Rp ${jasaTerpakai(c.no).toLocaleString('id-ID')}`,
+        `Rp ${jasaSisa(c).toLocaleString('id-ID')}`,
+        contractDateStatus(c.awal, c.akhir)
+      ]);
+
+      exportToPdf({
+        title: 'LAPORAN MONITORING KONTRAK PERJANJIAN JASA',
+        subtitle: 'Monitoring Realisasi Anggaran dan Pagu Kontrak Jasa Pelaksanaan',
+        filename: `LAPORAN_KONTRAK_JASA_PLN_${new Date().toISOString().slice(0, 10)}`,
+        orientation: 'landscape',
+        summaryCards: [
+          { label: 'Total Pagu Jasa', value: `Rp ${totalPaguJasa.toLocaleString('id-ID')}`, color: [0, 156, 222] },
+          { label: 'Total Terpakai', value: `Rp ${totalTerpakaiJasa.toLocaleString('id-ID')}`, color: [245, 158, 11] },
+          { label: 'Sisa Anggaran', value: `Rp ${totalSisaJasa.toLocaleString('id-ID')}`, color: [16, 185, 129] }
+        ],
+        tableHeaders: headers,
+        tableData: rows,
+        signatureTitle: 'Manager ULP Rangkasbitung',
+        signatureName: 'SEHAN DIKI TRIANSYAH'
+      });
+      showToast('Berhasil membuat PDF Laporan Kontrak Jasa', 'success');
+    } else {
+      if (filteredMaterial.length === 0) {
+        showToast('Tidak ada data Kontrak Material untuk diexport', 'warn');
+        return;
+      }
+      const headers = ['No', 'Nomor SPK', 'Supplier / Pabrikan', 'Deskripsi', 'Masa Berlaku', 'Total Item', 'In Transit', 'Status'];
+      const rows = filteredMaterial.map((c, index) => {
+        const inTransit = c.materials.filter(m => !m.checked).reduce((s, m) => s + (Number(m.qty) || 0), 0);
+        return [
+          index + 1,
+          c.no,
+          c.pt,
+          c.desc,
+          `${c.awal} s/d ${c.akhir}`,
+          c.materials.length,
+          `${inTransit} item`,
+          contractDateStatus(c.awal, c.akhir)
+        ];
+      });
+
+      exportToPdf({
+        title: 'LAPORAN MONITORING KONTRAK PENGADAAN MATERIAL',
+        subtitle: 'Monitoring Supply Chain & Status Kedatangan Material Distribusi',
+        filename: `LAPORAN_KONTRAK_MATERIAL_PLN_${new Date().toISOString().slice(0, 10)}`,
+        orientation: 'landscape',
+        summaryCards: [
+          { label: 'Total Kontrak Material', value: kontrakMaterial.length, color: [0, 156, 222] },
+          { label: 'Total In-Transit', value: totalTransit, color: [245, 158, 11] }
+        ],
+        tableHeaders: headers,
+        tableData: rows,
+        signatureTitle: 'Manager ULP Rangkasbitung',
+        signatureName: 'SEHAN DIKI TRIANSYAH'
+      });
+      showToast('Berhasil membuat PDF Laporan Kontrak Material', 'success');
     }
   };
 
@@ -208,14 +290,11 @@ export const KontrakModule: React.FC = () => {
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleExportExcel}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Export</span>
-                </button>
+                <ExportDropdown
+                  onExportExcel={handleExportExcel}
+                  onExportPdf={handleExportPdf}
+                  label="Export Jasa"
+                />
               </div>
             </div>
 
@@ -336,14 +415,11 @@ export const KontrakModule: React.FC = () => {
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleExportExcel}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Export</span>
-                </button>
+                <ExportDropdown
+                  onExportExcel={handleExportExcel}
+                  onExportPdf={handleExportPdf}
+                  label="Export Material"
+                />
               </div>
             </div>
 

@@ -6,6 +6,8 @@ import { GudangMaterialRecord } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
+import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import {
   Warehouse,
   Search,
@@ -46,18 +48,74 @@ export const GudangModule: React.FC = () => {
 
   const handleExportExcel = () => {
     const data = filteredGudang.map(g => ({
-      'KODE MATERIAL': g.material,
-      'DESKRIPSI MATERIAL': g.description,
-      'STOK SAP': g.sap,
-      'STOK FISIK': g.fisik,
-      'SATUAN': g.unit,
-      'KETERANGAN': g.keterangan || '-'
+      material: g.material,
+      description: g.description,
+      sap: g.sap,
+      fisik: g.fisik,
+      selisih: g.fisik - g.sap,
+      unit: g.unit,
+      status: g.fisik === g.sap ? 'SESUAI (BALANCE)' : g.fisik > g.sap ? 'SURPLUS FISIK' : 'MINUS FISIK',
+      keterangan: g.keterangan || '-'
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'GUDANG');
-    XLSX.writeFile(wb, 'DATA_STOK_GUDANG.xlsx');
+    exportToExcel({
+      filename: `LAPORAN_STOK_GUDANG_PLN_${new Date().toISOString().split('T')[0]}`,
+      sheetName: 'STOK_GUDANG',
+      columns: [
+        { header: 'KODE MATERIAL (SAP)', key: 'material', width: 18 },
+        { header: 'DESKRIPSI MATERIAL', key: 'description', width: 35 },
+        { header: 'STOK SAP', key: 'sap', width: 14 },
+        { header: 'STOK FISIK', key: 'fisik', width: 14 },
+        { header: 'SELISIH', key: 'selisih', width: 12 },
+        { header: 'SATUAN', key: 'unit', width: 10 },
+        { header: 'STATUS REKONSILIASI', key: 'status', width: 22 },
+        { header: 'KETERANGAN', key: 'keterangan', width: 25 }
+      ],
+      data
+    });
+    showToast('Data Stok Gudang berhasil diexport ke Excel!', 'success');
+  };
+
+  const handleExportPdf = () => {
+    const data = filteredGudang.map((g, idx) => ({
+      no: idx + 1,
+      material: g.material,
+      description: g.description,
+      sap: `${g.sap.toLocaleString('id-ID')} ${g.unit}`,
+      fisik: `${g.fisik.toLocaleString('id-ID')} ${g.unit}`,
+      status: g.fisik === g.sap ? 'Sesuai' : g.fisik > g.sap ? `+${g.fisik - g.sap}` : `${g.fisik - g.sap}`,
+      keterangan: g.keterangan || '-'
+    }));
+
+    exportToPdf({
+      filename: `LAPORAN_STOK_GUDANG_PLN_${new Date().toISOString().split('T')[0]}`,
+      title: 'LAPORAN REKONSILIASI STOK MATERIAL GUDANG (SAP VS FISIK)',
+      subtitle: 'Monitoring Ketersediaan Material Distribusi, Gardu, dan Saluran Udara Tegangan Menengah',
+      unit: 'PLN GUDANG RANGKASBITUNG',
+      orientation: 'landscape',
+      columns: [
+        { header: 'No', dataKey: 'no' },
+        { header: 'Kode SAP', dataKey: 'material' },
+        { header: 'Deskripsi Material', dataKey: 'description' },
+        { header: 'Stok SAP', dataKey: 'sap' },
+        { header: 'Stok Fisik', dataKey: 'fisik' },
+        { header: 'Selisih', dataKey: 'status' },
+        { header: 'Keterangan', dataKey: 'keterangan' }
+      ],
+      data,
+      summaryStats: [
+        { label: 'Total Item Komponen', value: `${totalItems} Item` },
+        { label: 'Total Fisik', value: totalFisik.toLocaleString('id-ID') },
+        { label: 'Total SAP', value: totalSap.toLocaleString('id-ID') },
+        { label: 'Status Selisih', value: `${gudang.filter(g => g.sap !== g.fisik).length} Item` }
+      ],
+      signer: {
+        name: 'Petugas / Admin Gudang',
+        title: 'Penanggung Jawab Gudang Material',
+        unit: 'PT PLN (Persero) ULP Rangkasbitung'
+      }
+    });
+    showToast('Data Stok Gudang berhasil diexport ke PDF resmi!', 'success');
   };
 
   const handleImportExcel = async () => {
@@ -160,14 +218,11 @@ export const GudangModule: React.FC = () => {
               <span>Import Excel</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Excel</span>
-            </button>
+            <ExportDropdown
+              onExportExcel={handleExportExcel}
+              onExportPdf={handleExportPdf}
+              label="Export Stok"
+            />
           </div>
         </div>
 

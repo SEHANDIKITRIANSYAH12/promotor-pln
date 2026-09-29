@@ -8,6 +8,8 @@ import { Modal } from '@/components/ui/Modal';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import {
   FileText,
   Search,
@@ -19,7 +21,6 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 export const WorkOrderModule: React.FC = () => {
   const {
@@ -273,21 +274,61 @@ export const WorkOrderModule: React.FC = () => {
   };
 
   const handleExportExcel = () => {
-    const data = filteredWO.map(w => ({
+    if (filteredWO.length === 0) {
+      showToast('Tidak ada data Work Order untuk diexport', 'warn');
+      return;
+    }
+    const data = filteredWO.map((w, index) => ({
+      'NO': index + 1,
       'NO WO': w.noWo,
       'NAMA PELANGGAN': w.namaPelanggan,
       'VENDOR PELAKSANA': w.vendor,
       'PENGAWAS 1': w.pengawas,
       'PENGAWAS 2': w.pengawas2 || '-',
-      'PROGRESS MATERIAL (%)': materialProgress(w),
-      'STATUS': combinedComplete(w) ? 'Selesai' : 'Aktif',
+      'PROGRESS MATERIAL': `${materialProgress(w)}%`,
+      'STATUS': combinedComplete(w) ? 'SELESAI (100%)' : 'BERJALAN',
       'KENDALA': w.ketKendala || '-'
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'WORK_ORDER');
-    XLSX.writeFile(wb, 'DATA_WORK_ORDER.xlsx');
+    exportToExcel(data, `LAPORAN_WORK_ORDER_PLN_${new Date().toISOString().slice(0, 10)}`, 'WORK_ORDER');
+    showToast('Berhasil mengexport data Work Order ke Excel', 'success');
+  };
+
+  const handleExportPdf = () => {
+    if (filteredWO.length === 0) {
+      showToast('Tidak ada data Work Order untuk diexport', 'warn');
+      return;
+    }
+    const headers = ['No', 'No WO', 'Nama Pelanggan', 'Vendor', 'Pengawas 1', 'Pengawas 2', 'Prog Mat', 'Status', 'Kendala'];
+    const rows = filteredWO.map((w, index) => [
+      index + 1,
+      w.noWo,
+      w.namaPelanggan,
+      w.vendor,
+      w.pengawas || '-',
+      w.pengawas2 || '-',
+      `${materialProgress(w)}%`,
+      combinedComplete(w) ? 'Selesai' : 'Berjalan',
+      w.ketKendala || '-'
+    ]);
+
+    exportToPdf({
+      title: 'LAPORAN MONITORING WORK ORDER (WO)',
+      subtitle: 'Monitoring Realisasi Pelaksanaan Pekerjaan Konstruksi dan Jaringan Distribusi',
+      filename: `LAPORAN_WORK_ORDER_PLN_${new Date().toISOString().slice(0, 10)}`,
+      orientation: 'landscape',
+      summaryCards: [
+        { label: 'Total Work Order', value: totalWO, color: [0, 156, 222] },
+        { label: 'WO Berjalan', value: woRunning, color: [245, 158, 11] },
+        { label: 'WO Selesai (100%)', value: woCompleted, color: [16, 185, 129] },
+        { label: 'Material Verified', value: totalVerifiedMaterial, color: [100, 116, 139] }
+      ],
+      tableHeaders: headers,
+      tableData: rows,
+      signatureTitle: 'Manager ULP Rangkasbitung',
+      signatureName: 'SEHAN DIKI TRIANSYAH'
+    });
+    showToast('Berhasil membuat dokumen PDF Laporan Work Order', 'success');
   };
 
   return (
@@ -359,14 +400,11 @@ export const WorkOrderModule: React.FC = () => {
               />
             </div>
 
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Excel</span>
-            </button>
+            <ExportDropdown
+              onExportExcel={handleExportExcel}
+              onExportPdf={handleExportPdf}
+              label="Export WO"
+            />
           </div>
         </div>
 

@@ -8,6 +8,8 @@ import { Modal } from '@/components/ui/Modal';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { useToast } from '@/components/ui/Toast';
 import { MapLocationPicker } from '@/components/ui/MapLocationPicker';
+import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import {
   ShieldCheck,
   Search,
@@ -248,6 +250,106 @@ export const PengawasanModule: React.FC = () => {
     await updateWOTiang(currentWO.noWo, nextRows);
   };
 
+  const handleExportExcel = () => {
+    const data = supervisorWOs.map(w => {
+      const matP = materialProgress(w);
+      const jasaP = jasaProgress(w);
+      const tiangP = tiangProgress(w);
+      const isDone = combinedComplete(w);
+
+      return {
+        noWo: w.noWo,
+        namaPelanggan: w.namaPelanggan,
+        idpel: w.idpel || '-',
+        vendor: w.vendor,
+        pengawas: w.pengawas,
+        pengawas2: w.pengawas2 || '-',
+        kontrakJasa: w.kontrakJasa || '-',
+        matProgress: `${matP}%`,
+        jasaProgress: `${jasaP}%`,
+        tiangProgress: `${tiangP}%`,
+        totalStatus: isDone ? 'Tuntas 100%' : 'Dalam Pengerjaan',
+        bastStatus: (w.bast?.conditions && Object.keys(w.bast.conditions).length > 0) ? 'Sudah BAST' : 'Belum BAST',
+        kendala: w.ketKendala || 'Nihil'
+      };
+    });
+
+    exportToExcel({
+      filename: `LAPORAN_PENGAWASAN_WO_PLN_${selectedSupervisor.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`,
+      sheetName: 'PENGAWASAN_WO',
+      columns: [
+        { header: 'NO WORK ORDER', key: 'noWo', width: 18 },
+        { header: 'NAMA PELANGGAN', key: 'namaPelanggan', width: 28 },
+        { header: 'IDPEL', key: 'idpel', width: 16 },
+        { header: 'VENDOR PELAKSANA', key: 'vendor', width: 25 },
+        { header: 'PENGAWAS 1', key: 'pengawas', width: 20 },
+        { header: 'PENGAWAS 2', key: 'pengawas2', width: 20 },
+        { header: 'KONTRAK SPK', key: 'kontrakJasa', width: 22 },
+        { header: 'PROG MATERIAL', key: 'matProgress', width: 15 },
+        { header: 'PROG JASA', key: 'jasaProgress', width: 15 },
+        { header: 'PROG TIANG', key: 'tiangProgress', width: 15 },
+        { header: 'STATUS PROGRESS', key: 'totalStatus', width: 18 },
+        { header: 'STATUS BAST', key: 'bastStatus', width: 15 },
+        { header: 'CATATAN KENDALA', key: 'kendala', width: 30 }
+      ],
+      data
+    });
+    showToast('Laporan Pengawasan berhasil diexport ke Excel!', 'success');
+  };
+
+  const handleExportPdf = () => {
+    const data = supervisorWOs.map((w, idx) => {
+      const matP = materialProgress(w);
+      const jasaP = jasaProgress(w);
+      const tiangP = tiangProgress(w);
+      const isDone = combinedComplete(w);
+
+      return {
+        no: idx + 1,
+        noWo: w.noWo,
+        namaPelanggan: w.namaPelanggan,
+        vendor: w.vendor,
+        matP: `${matP}%`,
+        jasaP: `${jasaP}%`,
+        tiangP: `${tiangP}%`,
+        status: isDone ? 'Tuntas 100%' : 'Pengerjaan',
+        kendala: w.ketKendala || '-'
+      };
+    });
+
+    exportToPdf({
+      filename: `LAPORAN_PENGAWASAN_WORK_ORDER_PLN_${new Date().toISOString().split('T')[0]}`,
+      title: 'LAPORAN PENGAWASAN PROGRESS WORK ORDER (3 PILAR FISIK)',
+      subtitle: `Monitoring Reservasi Material, Progress Jasa Berbobot, Penanaman Tiang & BAST · Pengawas: ${selectedSupervisor}`,
+      unit: 'PLN ULP RANGKASBITUNG',
+      orientation: 'landscape',
+      columns: [
+        { header: 'No', dataKey: 'no' },
+        { header: 'No Work Order', dataKey: 'noWo' },
+        { header: 'Nama Pelanggan', dataKey: 'namaPelanggan' },
+        { header: 'Vendor Pelaksana', dataKey: 'vendor' },
+        { header: 'Mat (%)', dataKey: 'matP' },
+        { header: 'Jasa (%)', dataKey: 'jasaP' },
+        { header: 'Tiang (%)', dataKey: 'tiangP' },
+        { header: 'Status Akhir', dataKey: 'status' },
+        { header: 'Kendala', dataKey: 'kendala' }
+      ],
+      data,
+      summaryStats: [
+        { label: 'Total WO Dipantau', value: `${supervisorWOs.length} Proyek` },
+        { label: 'Tuntas 100%', value: `${supervisorWOs.filter(w => combinedComplete(w)).length} WO` },
+        { label: 'Rata-rata Jasa', value: `${avgJasa}%` },
+        { label: 'Pengawas Bertugas', value: selectedSupervisor }
+      ],
+      signer: {
+        name: selectedSupervisor !== 'Semua Pengawas' ? selectedSupervisor : 'Pengawas Teknik ULP',
+        title: 'Pengawas Pekerjaan Distribusi',
+        unit: 'PT PLN (Persero) ULP Rangkasbitung'
+      }
+    });
+    showToast('Laporan Pengawasan berhasil diexport ke PDF resmi!', 'success');
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Metric Summary Cards */}
@@ -317,14 +419,22 @@ export const PengawasanModule: React.FC = () => {
           </select>
         </div>
 
-        <div className="w-full sm:w-72 relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Cari pelanggan, WO, atau vendor..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+        <div className="flex items-center gap-2.5 w-full sm:w-auto">
+          <div className="w-full sm:w-64 relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Cari pelanggan, WO, vendor..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+          </div>
+
+          <ExportDropdown
+            onExportExcel={handleExportExcel}
+            onExportPdf={handleExportPdf}
+            label="Export Pengawasan"
           />
         </div>
       </div>
