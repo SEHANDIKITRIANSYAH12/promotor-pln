@@ -111,7 +111,8 @@ interface PromotorContextType {
   toggleKontrakMaterialCheck: (contractNo: string, materialCode: string, checked: boolean) => Promise<void>;
   
   // Gudang & Standard Actions
-  updateGudangStok: (material: string, sap: number, fisik: number) => Promise<void>;
+  updateGudangStok: (material: string, sap: number, fisik: number, description?: string, unit?: string, keterangan?: string) => Promise<void>;
+  deleteGudangMaterial: (material: string) => Promise<void>;
   updateStandardQty: (name: string, materials: Record<string, number>, active?: boolean) => Promise<void>;
   
   // Vendor Actions
@@ -438,11 +439,63 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
     if (res.ok) await refreshData();
   };
 
-  const updateGudangStok = async (material: string, sap: number, fisik: number) => {
+  const updateGudangStok = async (
+    material: string,
+    sap: number,
+    fisik: number,
+    description?: string,
+    unit?: string,
+    keterangan?: string
+  ) => {
+    // 1. Optimistic instant UI update
+    setGudang(prev => {
+      const exists = prev.some(g => g.material === material);
+      if (exists) {
+        return prev.map(g =>
+          g.material === material
+            ? {
+                ...g,
+                sap: Number(sap) || 0,
+                fisik: Number(fisik) || 0,
+                ...(description !== undefined ? { description } : {}),
+                ...(unit !== undefined ? { unit } : {}),
+                ...(keterangan !== undefined ? { keterangan } : {})
+              }
+            : g
+        );
+      } else {
+        return [
+          {
+            material,
+            description: description || material,
+            sap: Number(sap) || 0,
+            fisik: Number(fisik) || 0,
+            unit: unit || 'pcs',
+            keterangan: keterangan || ''
+          },
+          ...prev
+        ];
+      }
+    });
+
+    // 2. Persist to API / Supabase PostgreSQL
     const res = await fetch('/api/promotor', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'UPDATE_GUDANG_STOK', payload: { material, sap, fisik } })
+      body: JSON.stringify({
+        action: 'UPDATE_GUDANG_STOK',
+        payload: { material, sap, fisik, description, unit, keterangan }
+      })
+    });
+    if (res.ok) await refreshData();
+  };
+
+  const deleteGudangMaterial = async (material: string) => {
+    setGudang(prev => prev.filter(g => g.material !== material));
+    const res = await fetch('/api/promotor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'DELETE_GUDANG_MATERIAL', payload: { material } })
     });
     if (res.ok) await refreshData();
   };
@@ -552,6 +605,7 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
         saveKontrakMaterial,
         toggleKontrakMaterialCheck,
         updateGudangStok,
+        deleteGudangMaterial,
         updateStandardQty,
         processVendorPickup,
         verifyVendorProof,

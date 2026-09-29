@@ -507,12 +507,36 @@ export async function POST(req: Request) {
 
       // 6. GUDANG ACTIONS
       case 'UPDATE_GUDANG_STOK': {
-        const { material, sap, fisik } = payload;
-        const g = await prisma.gudangMaterial.update({
+        const { material, sap, fisik, description, unit, keterangan } = payload;
+        const updateData: any = {
+          sap: Number(sap) || 0,
+          fisik: Number(fisik) || 0
+        };
+        if (description !== undefined) updateData.description = description;
+        if (unit !== undefined) updateData.unit = unit;
+        if (keterangan !== undefined) updateData.keterangan = keterangan;
+
+        const g = await prisma.gudangMaterial.upsert({
           where: { material },
-          data: { sap: Number(sap) || 0, fisik: Number(fisik) || 0 }
+          update: updateData,
+          create: {
+            material,
+            description: description || material,
+            sap: Number(sap) || 0,
+            fisik: Number(fisik) || 0,
+            unit: unit || 'pcs',
+            keterangan: keterangan || ''
+          }
         });
         return NextResponse.json({ success: true, data: g });
+      }
+
+      case 'DELETE_GUDANG_MATERIAL': {
+        const { material } = payload;
+        await prisma.gudangMaterial.deleteMany({
+          where: { material }
+        });
+        return NextResponse.json({ success: true });
       }
 
       // 7. STANDARD KONSTRUKSI
