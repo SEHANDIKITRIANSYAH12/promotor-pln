@@ -4,11 +4,13 @@ import React, { useState, useMemo } from 'react';
 import { usePromotor } from '@/context/PromotorContext';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
 import { Search, Upload, Download, Check, Layers, AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export const StdKonstruksiModule: React.FC = () => {
   const { standards, stdHeaders, gudang, updateStandardQty, refreshData } = usePromotor();
+  const { showToast } = useToast();
   const [activeSubTab, setActiveSubTab] = useState<'kategori' | 'material'>('kategori');
   const [search, setSearch] = useState('');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -62,7 +64,10 @@ export const StdKonstruksiModule: React.FC = () => {
   };
 
   const handleImportExcel = async () => {
-    if (!uploadFile) return alert('Pilih file Excel terlebih dahulu');
+    if (!uploadFile) {
+      showToast('Pilih file Excel terlebih dahulu', 'warn');
+      return;
+    }
     try {
       setIsProcessing(true);
       const data = await uploadFile.arrayBuffer();
@@ -91,9 +96,9 @@ export const StdKonstruksiModule: React.FC = () => {
       await refreshData();
       setUploadModalOpen(false);
       setUploadFile(null);
-      alert('Database Standard Konstruksi berhasil diperbarui!');
+      showToast('Database Standard Konstruksi berhasil diperbarui!', 'success');
     } catch (e: any) {
-      alert('Gagal mengunggah file: ' + e.message);
+      showToast('Gagal mengunggah file: ' + e.message, 'error');
     } finally {
       setIsProcessing(false);
     }

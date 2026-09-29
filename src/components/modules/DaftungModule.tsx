@@ -5,6 +5,7 @@ import { usePromotor } from '@/context/PromotorContext';
 import { DaftungRecord, WorkOrderRecord } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
 import {
   Users,
   Plus,
@@ -37,6 +38,7 @@ export const DaftungModule: React.FC = () => {
     toggleDaftungFlag,
     setActiveTab
   } = usePromotor();
+  const { showToast } = useToast();
 
   const [search, setSearch] = useState('');
   const [slaFilter, setSlaFilter] = useState<string>('all');
@@ -133,7 +135,10 @@ export const DaftungModule: React.FC = () => {
   }, [daftung, slaFilter, search]);
 
   const openApplyWOModal = (r: DaftungRecord) => {
-    if (r.noWo) return alert('Pelanggan ini sudah memiliki Work Order');
+    if (r.noWo) {
+      showToast('Pelanggan ini sudah memiliki Work Order', 'warn');
+      return;
+    }
     if (!r.idpel || r.idpel.startsWith('TMP-')) {
       setEditingDaftungId(r.id);
       setTempIdpel(r.idpel || '');
@@ -172,8 +177,14 @@ export const DaftungModule: React.FC = () => {
   const handleCreateWO = async () => {
     if (!applyDaftung) return;
     const c = kontrakJasa.find(x => x.no === applyForm.kontrakJasa);
-    if (!c) return alert('Kontrak Jasa wajib dipilih pada Tab Umum');
-    if (applyForm.nilaiJasa <= 0) return alert('Nilai Jasa WO harus lebih dari 0');
+    if (!c) {
+      showToast('Kontrak Jasa wajib dipilih pada Tab Umum', 'warn');
+      return;
+    }
+    if (applyForm.nilaiJasa <= 0) {
+      showToast('Nilai Jasa WO harus lebih dari 0', 'warn');
+      return;
+    }
 
     const s = applyDaftung.surveyId ? surveys.find(x => x.id === applyDaftung.surveyId) : null;
     const mats = (s?.materials || []).map(m => ({
@@ -222,7 +233,7 @@ export const DaftungModule: React.FC = () => {
     });
 
     setApplyModalOpen(false);
-    alert(`Work Order ${noWo} berhasil dibuat!`);
+    showToast(`Work Order ${noWo} berhasil dibuat!`, 'success');
   };
 
   const handleExportExcel = () => {
@@ -611,11 +622,12 @@ export const DaftungModule: React.FC = () => {
                 type="button"
                 onClick={async () => {
                   if (!manualForm.idpel || !manualForm.nama) {
-                    return alert('IDPEL dan Nama pelanggan wajib diisi');
+                    showToast('IDPEL dan Nama pelanggan wajib diisi', 'warn');
+                    return;
                   }
                   await saveManualDaftung(manualForm);
                   setManualModalOpen(false);
-                  alert('Daftung manual berhasil ditambahkan!');
+                  showToast('Daftung manual berhasil ditambahkan!', 'success');
                 }}
                 className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold"
               >
@@ -694,10 +706,12 @@ export const DaftungModule: React.FC = () => {
                 type="button"
                 onClick={async () => {
                   if (!tempIdpel || tempIdpel.startsWith('TMP-')) {
-                    return alert('Masukkan IDPEL yang valid');
+                    showToast('Masukkan IDPEL yang valid', 'warn');
+                    return;
                   }
                   if (editingDaftungId) {
                     await updateDaftungIdpel(editingDaftungId, tempIdpel);
+                    showToast('IDPEL berhasil diperbarui!', 'success');
                   }
                   setIdpelModalOpen(false);
                 }}

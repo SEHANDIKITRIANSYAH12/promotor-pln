@@ -161,8 +161,14 @@ export const SurveyModule: React.FC = () => {
   };
 
   const handleAddCategory = () => {
-    if (!selectedCatName) return alert('Pilih kategori konstruksi');
-    if (selectedCatQty <= 0) return alert('Qty harus lebih dari 0');
+    if (!selectedCatName) {
+      showToast('Pilih kategori konstruksi', 'warn');
+      return;
+    }
+    if (selectedCatQty <= 0) {
+      showToast('Qty harus lebih dari 0', 'warn');
+      return;
+    }
     if (!surveyDraft) return;
 
     const nextSelections = [
@@ -501,10 +507,12 @@ export const SurveyModule: React.FC = () => {
                     disabled={isSaving}
                     onClick={() => {
                       if (currentStep === 0 && !surveyDraft.customer.name.trim()) {
-                        return alert('⚠️ Langkah 1: Nama pelanggan wajib diisi sebelum lanjut.');
+                        showToast('Langkah 1: Nama pelanggan wajib diisi sebelum lanjut.', 'warn');
+                        return;
                       }
                       if (currentStep === 3 && surveyDraft.standardSelections.length === 0) {
-                        return alert('⚠️ Langkah 4: Silakan pilih dan tambahkan minimal 1 Kategori Konstruksi TM.');
+                        showToast('Langkah 4: Silakan pilih dan tambahkan minimal 1 Kategori Konstruksi TM.', 'warn');
+                        return;
                       }
                       setCurrentStep(prev => prev + 1);
                     }}

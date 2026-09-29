@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { usePromotor } from '@/context/PromotorContext';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
 import {
   Truck,
   FileCheck,
@@ -27,6 +28,7 @@ export const VendorModule: React.FC = () => {
     updateWOTiang,
     updateWOMaterials
   } = usePromotor();
+  const { showToast } = useToast();
 
   const [activeSubTab, setActiveSubTab] = useState<'pickup' | 'tiang'>('pickup');
 
@@ -69,9 +71,18 @@ export const VendorModule: React.FC = () => {
 
   // Handle process pickup
   const handleProcessPickup = async () => {
-    if (!currentWO) return alert('Pilih Work Order terlebih dahulu');
-    if (!selectedPickupIndices.length) return alert('Pilih minimal 1 material yang akan diambil');
-    if (!suratJalanNo.trim()) return alert('Nomor Surat Jalan wajib diisi');
+    if (!currentWO) {
+      showToast('Pilih Work Order terlebih dahulu', 'warn');
+      return;
+    }
+    if (!selectedPickupIndices.length) {
+      showToast('Pilih minimal 1 material yang akan diambil', 'warn');
+      return;
+    }
+    if (!suratJalanNo.trim()) {
+      showToast('Nomor Surat Jalan wajib diisi', 'warn');
+      return;
+    }
 
     const pickupsToSave: any[] = [];
     const updatedMats = JSON.parse(JSON.stringify(currentWO.materials || []));
@@ -92,7 +103,10 @@ export const VendorModule: React.FC = () => {
       }
     });
 
-    if (!pickupsToSave.length) return alert('Qty pengambilan harus lebih dari 0');
+    if (!pickupsToSave.length) {
+      showToast('Qty pengambilan harus lebih dari 0', 'warn');
+      return;
+    }
 
     await updateWOMaterials(currentWO.noWo, updatedMats);
     await processVendorPickup(pickupsToSave);
@@ -100,7 +114,7 @@ export const VendorModule: React.FC = () => {
     setSelectedPickupIndices([]);
     setSuratJalanNo('');
     setUploadFile(null);
-    alert('Pengambilan material dan Surat Jalan berhasil disimpan!');
+    showToast('Pengambilan material dan Surat Jalan berhasil disimpan!', 'success');
   };
 
   // Tiang WO list
@@ -373,7 +387,7 @@ export const VendorModule: React.FC = () => {
                               type="button"
                               onClick={async () => {
                                 await verifyVendorProof(p.sj);
-                                alert(`Surat Jalan ${p.sj} diverifikasi oleh Pengawas!`);
+                                showToast(`Surat Jalan ${p.sj} diverifikasi oleh Pengawas!`, 'success');
                               }}
                               className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] shadow-xs"
                             >
@@ -504,7 +518,7 @@ export const VendorModule: React.FC = () => {
                               next[idx].verified = true;
                               next[idx].verifiedQty = next[idx].installedQty;
                               await updateWOTiang(currentTiangWO.noWo, next);
-                              alert('Pemasangan tiang berhasil diverifikasi Pengawas!');
+                              showToast('Pemasangan tiang berhasil diverifikasi Pengawas!', 'success');
                             }}
                             className={`px-3 py-1 rounded-lg text-xs font-bold ${
                               t.verified
@@ -551,10 +565,14 @@ export const VendorModule: React.FC = () => {
               <button
                 type="button"
                 onClick={async () => {
-                  if (!newVTName.trim()) return alert('Nama vendor wajib diisi');
+                  if (!newVTName.trim()) {
+                    showToast('Nama vendor wajib diisi', 'warn');
+                    return;
+                  }
                   await saveVendorTiang(newVTName.trim());
                   setNewVendorTiangModal(false);
                   setNewVTName('');
+                  showToast('Vendor tiang baru berhasil ditambahkan!', 'success');
                 }}
                 className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl"
               >

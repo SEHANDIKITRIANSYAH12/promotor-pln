@@ -5,6 +5,7 @@ import { usePromotor } from '@/context/PromotorContext';
 import { GudangMaterialRecord } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
 import {
   Warehouse,
   Search,
@@ -19,6 +20,7 @@ import * as XLSX from 'xlsx';
 
 export const GudangModule: React.FC = () => {
   const { gudang, updateGudangStok, refreshData } = usePromotor();
+  const { showToast } = useToast();
   const [search, setSearch] = useState('');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -59,7 +61,10 @@ export const GudangModule: React.FC = () => {
   };
 
   const handleImportExcel = async () => {
-    if (!uploadFile) return alert('Pilih file Excel terlebih dahulu');
+    if (!uploadFile) {
+      showToast('Pilih file Excel terlebih dahulu', 'warn');
+      return;
+    }
     try {
       setIsProcessing(true);
       const data = await uploadFile.arrayBuffer();
@@ -80,9 +85,9 @@ export const GudangModule: React.FC = () => {
       await refreshData();
       setUploadModalOpen(false);
       setUploadFile(null);
-      alert('Stok Gudang berhasil diperbarui dari Excel!');
+      showToast('Stok Gudang berhasil diperbarui dari Excel!', 'success');
     } catch (e: any) {
-      alert('Gagal mengimpor file: ' + e.message);
+      showToast('Gagal mengimpor file: ' + e.message, 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -231,7 +236,7 @@ export const GudangModule: React.FC = () => {
                 onClick={async () => {
                   await updateGudangStok(editItem.material, tempSap, tempFisik);
                   setEditItem(null);
-                  alert('Stok material berhasil diperbarui!');
+                  showToast('Stok material berhasil diperbarui!', 'success');
                 }}
                 className="px-4 py-2 bg-pln-600 text-white text-xs font-bold rounded-xl"
               >

@@ -190,7 +190,7 @@ export default function VendorPortalPage() {
   const handleSubmitPickup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pickupMaterial || !pickupQty || !pickupSJ) {
-      alert('Mohon lengkapi material, jumlah, dan nomor Surat Jalan.');
+      showToast('⚠️ Mohon lengkapi material, jumlah, dan nomor Surat Jalan.');
       return;
     }
 

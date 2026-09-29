@@ -517,6 +517,7 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
         activeTab,
         setActiveTab,
         loading,
+        isSyncing,
         standards,
         stdHeaders,
         gudang,
