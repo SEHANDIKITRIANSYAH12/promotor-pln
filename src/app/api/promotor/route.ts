@@ -185,6 +185,24 @@ export async function POST(req: Request) {
         const survey = await prisma.survey.findUnique({ where: { id: surveyId } });
         if (!survey) throw new Error('Survey tidak ditemukan');
 
+        // Check 1: If survey already has daftungId linked
+        if (survey.daftungId) {
+          const existingDaftung = await prisma.daftung.findUnique({ where: { id: survey.daftungId } });
+          if (existingDaftung) {
+            return NextResponse.json({ success: true, data: existingDaftung, message: 'Survey sudah pernah dimasukkan ke Daftung' });
+          }
+        }
+
+        // Check 2: If any Daftung already has this surveyId
+        const existingBySurveyId = await prisma.daftung.findFirst({ where: { surveyId } });
+        if (existingBySurveyId) {
+          await prisma.survey.update({
+            where: { id: surveyId },
+            data: { daftungId: existingBySurveyId.id, status: 'Selesai' }
+          });
+          return NextResponse.json({ success: true, data: existingBySurveyId, message: 'Survey sudah ada di Daftung' });
+        }
+
         const cust = JSON.parse(survey.customer || '{}');
         const tech = JSON.parse(survey.technical || '{}');
         const count = await prisma.daftung.count();

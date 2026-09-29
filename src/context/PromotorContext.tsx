@@ -19,6 +19,9 @@ export const USERS_PRESET: UserProfile[] = [
   {
     id: 'usr_admin',
     name: 'Budi Santoso, S.T.',
+    nip: '198503152010011001',
+    email: 'budi.santoso@pln.co.id',
+    password: 'admin',
     role: 'superadmin',
     roleTitle: 'Super Administrator / Manager ULP',
     unit: 'PLN ULP Rangkasbitung',
@@ -27,6 +30,9 @@ export const USERS_PRESET: UserProfile[] = [
   {
     id: 'usr_surveyor',
     name: 'Ahmad Fauzi',
+    nip: '199207242015021002',
+    email: 'ahmad.fauzi@pln.co.id',
+    password: 'admin',
     role: 'surveyor',
     roleTitle: 'Petugas Survey Lapangan',
     unit: 'PLN ULP Rangkasbitung',
@@ -35,6 +41,9 @@ export const USERS_PRESET: UserProfile[] = [
   {
     id: 'usr_pengawas',
     name: 'Faisal Reza, S.T.',
+    nip: '198911042013031003',
+    email: 'faisal.reza@pln.co.id',
+    password: 'admin',
     role: 'pengawas',
     roleTitle: 'Pengawas Teknik Konstruksi & Jaringan',
     unit: 'PLN ULP Rangkasbitung',
@@ -43,6 +52,9 @@ export const USERS_PRESET: UserProfile[] = [
   {
     id: 'usr_gudang',
     name: 'Siti Rahmawati',
+    nip: '199405182018012004',
+    email: 'siti.rahmawati@pln.co.id',
+    password: 'admin',
     role: 'admin_gudang',
     roleTitle: 'Admin Logistik & Gudang',
     unit: 'Gudang Rangkasbitung',
@@ -73,6 +85,11 @@ interface PromotorContextType {
   vendorTiangMaster: string[];
   pickupHistory: VendorPickupItem[];
   
+  // Auth state
+  isAuthenticated: boolean;
+  login: (identifier: string, password?: string, remember?: boolean) => Promise<{ success: boolean; message?: string }>;
+  logout: () => void;
+
   // RBAC User & Roles
   currentUser: UserProfile;
   setCurrentUser: (user: UserProfile) => void;
@@ -136,6 +153,7 @@ const PromotorContext = createContext<PromotorContextType | undefined>(undefined
 
 export function PromotorProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserProfile>(USERS_PRESET[0]);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>('std');
   const [loading, setLoading] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -160,12 +178,58 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
     const found = USERS_PRESET.find(u => u.role === role) || USERS_PRESET[0];
     setCurrentUser(found);
     localStorage.setItem('promotor_user_role', role);
+    if (isAuthenticated) {
+      localStorage.setItem('promotor_auth_user', JSON.stringify(found));
+    }
     
     // Auto redirect tab if current tab is not permitted
     const allowed = ROLE_PERMISSIONS[role] || [];
     if (!allowed.includes(activeTab) && allowed.length > 0) {
       setActiveTab(allowed[0]);
     }
+  };
+
+  const login = async (identifier: string, password?: string, remember: boolean = true): Promise<{ success: boolean; message?: string }> => {
+    const cleanId = identifier.trim().toLowerCase();
+    const cleanPass = (password || '').trim();
+
+    // Match by NIP, email, id, role, or name
+    const foundUser = USERS_PRESET.find(u => 
+      (u.nip && u.nip.toLowerCase() === cleanId) ||
+      (u.email && u.email.toLowerCase() === cleanId) ||
+      u.role.toLowerCase() === cleanId ||
+      u.id.toLowerCase() === cleanId ||
+      u.name.toLowerCase().includes(cleanId)
+    );
+
+    if (!foundUser) {
+      return { success: false, message: 'NIP atau kata sandi tidak cocok. Periksa kembali lalu coba lagi.' };
+    }
+
+    // Check password if provided (accept 'admin', 'admin123', 'promotor123' or user password)
+    if (cleanPass && foundUser.password && cleanPass !== foundUser.password && cleanPass !== 'admin123' && cleanPass !== 'promotor123') {
+      return { success: false, message: 'NIP atau kata sandi tidak cocok. Periksa kembali lalu coba lagi.' };
+    }
+
+    // Successful login
+    setCurrentUser(foundUser);
+    setIsAuthenticated(true);
+    if (remember) {
+      localStorage.setItem('promotor_auth_user', JSON.stringify(foundUser));
+      localStorage.setItem('promotor_user_role', foundUser.role);
+    }
+
+    const allowed = ROLE_PERMISSIONS[foundUser.role] || [];
+    if (!allowed.includes(activeTab) && allowed.length > 0) {
+      setActiveTab(allowed[0]);
+    }
+
+    return { success: true };
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('promotor_auth_user');
   };
 
   const applyData = (data: any) => {
@@ -207,14 +271,27 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // 1. Restore user role
+    // 1. Restore auth session
+    const savedAuth = localStorage.getItem('promotor_auth_user');
+    if (savedAuth) {
+      try {
+        const user = JSON.parse(savedAuth);
+        const found = USERS_PRESET.find(u => u.id === user.id || u.role === user.role);
+        if (found) {
+          setCurrentUser(found);
+          setIsAuthenticated(true);
+        }
+      } catch (_) {}
+    }
+
+    // 2. Restore user role
     const savedRole = localStorage.getItem('promotor_user_role') as UserRole;
     if (savedRole && ROLE_PERMISSIONS[savedRole]) {
       const found = USERS_PRESET.find(u => u.role === savedRole);
       if (found) setCurrentUser(found);
     }
 
-    // 2. Instant cache hydration for 0ms initial load
+    // 3. Instant cache hydration for 0ms initial load
     try {
       const cached = localStorage.getItem('promotor_cached_v1');
       if (cached) {
@@ -224,7 +301,7 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (_) {}
 
-    // 3. Silent revalidation in background
+    // 4. Silent revalidation in background
     refreshData(true);
   }, []);
 
@@ -303,140 +380,90 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
     return Object.values(transitMaterialMap).reduce((a, b) => a + b, 0);
   }, [transitMaterialMap]);
 
+  // Robust API Post Helper
+  const apiPost = async (action: string, payload: any) => {
+    try {
+      const res = await fetch('/api/promotor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, payload })
+      });
+      
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        const errorMsg = data?.error || data?.message || `Gagal memproses ${action} (HTTP ${res.status})`;
+        throw new Error(errorMsg);
+      }
+      
+      await refreshData();
+      return data;
+    } catch (err: any) {
+      if (err.name === 'TypeError' && (err.message.includes('fetch') || err.message.includes('Load failed') || err.message.includes('NetworkError'))) {
+        throw new Error('Koneksi ke backend sempat terputus atau server sedang compiling. Silakan klik tombol sekali lagi.');
+      }
+      throw err;
+    }
+  };
+
   // Actions
   const saveSurvey = async (record: SurveyRecord) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'SAVE_SURVEY', payload: { record } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('SAVE_SURVEY', { record });
   };
 
   const moveSurveyToDaftung = async (surveyId: string) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'MOVE_SURVEY_TO_DAFTUNG', payload: { surveyId } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('MOVE_SURVEY_TO_DAFTUNG', { surveyId });
   };
 
   const saveManualDaftung = async (record: Partial<DaftungRecord>) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'SAVE_MANUAL_DAFTUNG', payload: { record } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('SAVE_MANUAL_DAFTUNG', { record });
   };
 
   const updateDaftungIdpel = async (id: string, idpel: string) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'UPDATE_DAFTUNG_IDPEL', payload: { id, idpel } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('UPDATE_DAFTUNG_IDPEL', { id, idpel });
   };
 
   const toggleDaftungFlag = async (id: string, flag: 'nidi' | 'slo', value: boolean) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'TOGGLE_DAFTUNG_FLAG', payload: { id, flag, value } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('TOGGLE_DAFTUNG_FLAG', { id, flag, value });
   };
 
   const createWOFromDaftung = async (payload: any) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'CREATE_WO_FROM_DAFTUNG', payload })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('CREATE_WO_FROM_DAFTUNG', payload);
   };
 
   const updateWOMaterials = async (noWo: string, materials: MaterialItem[]) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'UPDATE_WO_MATERIALS', payload: { noWo, materials } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('UPDATE_WO_MATERIALS', { noWo, materials });
   };
 
   const updateWOJasaProgress = async (noWo: string, jasaProgress?: any, jasaWeights?: any) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'UPDATE_WO_JASA_PROGRESS', payload: { noWo, jasaProgress, jasaWeights } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('UPDATE_WO_JASA_PROGRESS', { noWo, jasaProgress, jasaWeights });
   };
 
   const updateWOTiang = async (noWo: string, tiangRows: any[]) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'UPDATE_WO_TIANG', payload: { noWo, tiangRows } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('UPDATE_WO_TIANG', { noWo, tiangRows });
   };
 
   const updateWOKendala = async (noWo: string, ketKendala: string) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'UPDATE_WO_KENDALA', payload: { noWo, ketKendala } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('UPDATE_WO_KENDALA', { noWo, ketKendala });
   };
 
   const updateWorkOrder = async (noWo: string, data: { vendor?: string; pengawas?: string; pengawas2?: string; vendorTiang?: string; ketKendala?: string }) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'UPDATE_WORK_ORDER', payload: { noWo, ...data } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('UPDATE_WORK_ORDER', { noWo, ...data });
   };
 
   const saveBAST = async (noWo: string, bast: any) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'SAVE_BAST', payload: { noWo, bast } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('SAVE_BAST', { noWo, bast });
   };
 
   const saveKontrakJasa = async (record: KontrakJasaRecord) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'SAVE_KONTRAK_JASA', payload: { record } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('SAVE_KONTRAK_JASA', { record });
   };
 
   const saveKontrakMaterial = async (record: KontrakMaterialRecord) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'SAVE_KONTRAK_MATERIAL', payload: { record } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('SAVE_KONTRAK_MATERIAL', { record });
   };
 
   const toggleKontrakMaterialCheck = async (contractNo: string, materialCode: string, checked: boolean) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'TOGGLE_KONTRAK_MATERIAL_CHECK', payload: { contractNo, materialCode, checked } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('TOGGLE_KONTRAK_MATERIAL_CHECK', { contractNo, materialCode, checked });
   };
 
   const updateGudangStok = async (
@@ -479,89 +506,43 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
     });
 
     // 2. Persist to API / Supabase PostgreSQL
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'UPDATE_GUDANG_STOK',
-        payload: { material, sap, fisik, description, unit, keterangan }
-      })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('UPDATE_GUDANG_STOK', { material, sap, fisik, description, unit, keterangan });
   };
 
   const deleteGudangMaterial = async (material: string) => {
     setGudang(prev => prev.filter(g => g.material !== material));
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'DELETE_GUDANG_MATERIAL', payload: { material } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('DELETE_GUDANG_MATERIAL', { material });
   };
 
   const updateStandardQty = async (name: string, materials: Record<string, number>, active?: boolean) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'UPDATE_STANDARD_QTY', payload: { name, materials, active } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('UPDATE_STANDARD_QTY', { name, materials, active });
   };
 
   const processVendorPickup = async (pickups: any[]) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'PROCESS_VENDOR_PICKUP', payload: { pickups } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('PROCESS_VENDOR_PICKUP', { pickups });
   };
 
   const verifyVendorProof = async (sj: string) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'VERIFY_VENDOR_PROOF', payload: { sj } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('VERIFY_VENDOR_PROOF', { sj });
   };
 
   const saveVendorTiang = async (name: string) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'SAVE_VENDOR_TIANG', payload: { name } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('SAVE_VENDOR_TIANG', { name });
   };
 
   const approveWOForVendor = async (noWo: string): Promise<string> => {
     const token = `VND-${noWo.replace(/[^a-zA-Z0-9]/g, '')}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'APPROVE_WO_VENDOR', 
-        payload: { 
-          noWo, 
-          vendorToken: token,
-          vendorApproved: true,
-          tglPemeriksaanPengawas: new Date().toISOString().split('T')[0]
-        } 
-      })
+    await apiPost('APPROVE_WO_VENDOR', { 
+      noWo, 
+      vendorToken: token,
+      vendorApproved: true,
+      tglPemeriksaanPengawas: new Date().toISOString().split('T')[0]
     });
-    if (res.ok) await refreshData();
     return token;
   };
 
   const updateWOVendorCatatan = async (noWo: string, catatan: string) => {
-    const res = await fetch('/api/promotor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'UPDATE_WO_VENDOR_CATATAN', payload: { noWo, catatan } })
-    });
-    if (res.ok) await refreshData();
+    return await apiPost('UPDATE_WO_VENDOR_CATATAN', { noWo, catatan });
   };
 
   return (
@@ -581,6 +562,9 @@ export function PromotorProvider({ children }: { children: React.ReactNode }) {
         kontrakMaterial,
         vendorTiangMaster,
         pickupHistory,
+        isAuthenticated,
+        login,
+        logout,
         currentUser,
         setCurrentUser,
         switchRole,

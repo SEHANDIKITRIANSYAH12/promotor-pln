@@ -3,6 +3,9 @@ export type UserRole = 'superadmin' | 'surveyor' | 'pengawas' | 'admin_gudang';
 export interface UserProfile {
   id: string;
   name: string;
+  nip?: string;
+  email?: string;
+  password?: string;
   role: UserRole;
   roleTitle: string;
   unit: string;

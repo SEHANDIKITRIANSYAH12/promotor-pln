@@ -12,7 +12,8 @@ import {
   FileSignature,
   BarChart3,
   Zap,
-  Lock
+  Lock,
+  LogOut
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -22,7 +23,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) => {
-  const { activeTab, setActiveTab, daftung, surveys, workorders, currentUser, canAccessTab } = usePromotor();
+  const { activeTab, setActiveTab, daftung, surveys, workorders, currentUser, canAccessTab, logout } = usePromotor();
 
   const allNavItems = [
     { id: 'std', label: 'STD KONSTRUKSI', icon: Layers, desc: 'Master Matriks TM' },
@@ -68,17 +69,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
         )}
       >
         {/* Brand Header */}
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-pln-600 to-pln-500 flex items-center justify-center text-white shadow-md shadow-pln-500/20">
-              <Zap className="w-5 h-5 fill-current" />
-            </div>
-            <div>
-              <div className="text-base font-black text-slate-800 tracking-tight flex items-center gap-1.5">
-                PROMOTOR <span className="text-xs px-1.5 py-0.5 rounded bg-pln-100 text-pln-700 font-bold">V1.0</span>
+            <img
+              src="/pln-logo.png"
+              alt="PLN UP3 Banten Selatan"
+              className="h-10 w-auto object-contain shrink-0"
+            />
+            <div className="min-w-0">
+              <div className="text-sm font-black text-slate-800 tracking-tight flex items-center gap-1.5">
+                PROMOTOR <span className="text-[10px] px-1.5 py-0.5 rounded bg-pln-100 text-pln-700 font-bold">V1.0</span>
               </div>
-              <p className="text-[11px] font-medium text-slate-400">
-                Project & Material Control
+              <p className="text-[10px] font-medium text-slate-400 truncate">
+                Project &amp; Material Control
               </p>
             </div>
           </div>
@@ -150,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
         </div>
 
         {/* Footer Info */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+        <div className="p-3.5 border-t border-slate-100 bg-slate-50/50 space-y-2">
           <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
             <span>RBAC Aktif</span>
             <span className="inline-flex items-center gap-1.5 text-emerald-600 font-semibold">
@@ -158,8 +161,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
               Role Protected
             </span>
           </div>
-          <div className="mt-1 text-[10px] text-slate-400 text-center">
-            PLN Unit Pelaksana Pelayanan Pelanggan
+          
+          <button
+            type="button"
+            onClick={() => {
+              setMobileOpen(false);
+              logout();
+            }}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-xs font-bold transition-colors border border-slate-200 hover:border-rose-200 shadow-2xs cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Keluar (Logout)</span>
+          </button>
+
+          <div className="pt-1 flex items-center justify-center gap-1.5 opacity-80">
+            <img src="/pln-logo.png" alt="PLN Logo" className="h-4 w-auto object-contain" />
+            <span className="text-[10px] text-slate-400 font-semibold">PLN UP3 Banten Selatan</span>
           </div>
         </div>
       </aside>

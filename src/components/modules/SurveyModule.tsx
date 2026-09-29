@@ -29,14 +29,16 @@ import {
   Check,
   ExternalLink,
   Printer,
-  FileText
+  FileText,
+  AlertTriangle,
+  CheckCircle
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const SURVEY_STEPS = ['Data Pelanggan', 'Data Teknis', 'Lokasi & Koordinat', 'Kategori & Material', 'Review & Submit'];
 
 export const SurveyModule: React.FC = () => {
-  const { surveys, standards, gudang, saveSurvey, moveSurveyToDaftung } = usePromotor();
+  const { surveys, standards, gudang, saveSurvey, moveSurveyToDaftung, setActiveTab: setMainMenuTab } = usePromotor();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [search, setSearch] = useState('');
@@ -53,6 +55,46 @@ export const SurveyModule: React.FC = () => {
     message: '',
     onConfirm: () => {}
   });
+
+  // Move to Daftung Confirm Dialog & Loading state
+  const [movingSurveyId, setMovingSurveyId] = useState<string | null>(null);
+  const [daftungConfirm, setDaftungConfirm] = useState<{
+    isOpen: boolean;
+    survey: SurveyRecord | null;
+  }>({
+    isOpen: false,
+    survey: null
+  });
+
+  const handleRequestMoveToDaftung = (s: SurveyRecord) => {
+    if (s.daftungId) {
+      showToast(`Survey ${s.id} sudah pernah dimasukkan ke Daftung (${s.daftungId})!`, 'warn');
+      return;
+    }
+    setDaftungConfirm({
+      isOpen: true,
+      survey: s
+    });
+  };
+
+  const handleConfirmMoveToDaftung = async () => {
+    const s = daftungConfirm.survey;
+    if (!s || movingSurveyId) return;
+
+    try {
+      setMovingSurveyId(s.id);
+      await moveSurveyToDaftung(s.id);
+      showToast(`Survey ${s.customer.name} (${s.id}) berhasil dimasukkan ke Daftar Tunggu (Daftung)!`, 'success');
+      setDaftungConfirm({ isOpen: false, survey: null });
+      if (detailSurvey?.id === s.id) {
+        setDetailSurvey(null);
+      }
+    } catch (err: any) {
+      showToast(`Gagal memasukkan ke Daftung: ${err.message}`, 'error');
+    } finally {
+      setMovingSurveyId(null);
+    }
+  };
   
   // Wizard Modal
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -69,6 +111,38 @@ export const SurveyModule: React.FC = () => {
   const [selectedCatQty, setSelectedCatQty] = useState(1);
   const [selectedCatNote, setSelectedCatNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Stock Confirmation Dialog for Category
+  const [categoryConfirm, setCategoryConfirm] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    items?: Array<{ name: string; needed: number; inStock: number; unit: string }>;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: 'danger' | 'warning' | 'info';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    items: [],
+    confirmText: 'Ya, Lanjutkan',
+    cancelText: 'Batal',
+    variant: 'warning',
+    onConfirm: () => {},
+  });
+
+  // Stock Confirmation Dialog for Final Submit
+  const [submitStockConfirm, setSubmitStockConfirm] = useState<{
+    isOpen: boolean;
+    deficitItems: Array<{ name: string; needed: number; inStock: number; unit: string; deficit: number }>;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    deficitItems: [],
+    onConfirm: () => {},
+  });
 
   const activeSurveys = useMemo(
     () => surveys.filter(s => s.status !== 'Historical' && !s.supersededBy),
@@ -168,33 +242,148 @@ export const SurveyModule: React.FC = () => {
     return Object.values(agg);
   };
 
+  // Helper to check standard materials vs gudang stock
+  const checkStandardStock = (catName: string, catQty: number) => {
+    const s = standards.find(x => x.name === catName);
+    if (!s || !s.materials || Object.keys(s.materials).length === 0) {
+      return { hasMaterials: false, totalQty: 0, items: [], outOfStockItems: [] };
+    }
+
+    const nonZeroEntries = Object.entries(s.materials).filter(([_, baseQty]) => (Number(baseQty) || 0) > 0);
+    const totalQty = nonZeroEntries.reduce((sum, [_, q]) => sum + (Number(q) || 0), 0);
+
+    if (nonZeroEntries.length === 0 || totalQty <= 0) {
+      return { hasMaterials: false, totalQty: 0, items: [], outOfStockItems: [] };
+    }
+
+    const items = nonZeroEntries.map(([matName, baseQty]) => {
+      const needed = (Number(baseQty) || 0) * (Number(catQty) || 1);
+      const g = gudang.find(
+        x =>
+          String(x.material).trim().toLowerCase() === matName.trim().toLowerCase() ||
+          x.description.toLowerCase().includes(matName.toLowerCase())
+      );
+      const inStock = g ? Number(g.fisik) || 0 : 0;
+      const unit = g?.unit || 'pcs';
+      const isDeficit = inStock < needed;
+      const isZero = inStock <= 0;
+      return {
+        matName,
+        description: g?.description || matName,
+        needed,
+        inStock,
+        unit,
+        isDeficit,
+        isZero
+      };
+    });
+
+    const outOfStockItems = items.filter(x => x.isDeficit);
+    return { hasMaterials: true, totalQty, items, outOfStockItems };
+  };
+
+  // Helper to check overall survey materials against warehouse stock
+  const getSurveyDeficitMaterials = (mats: MaterialItem[]) => {
+    const deficits: Array<{ name: string; needed: number; inStock: number; unit: string; deficit: number }> = [];
+    mats.forEach(m => {
+      const g = gudang.find(
+        x =>
+          String(x.material).trim().toLowerCase() === m.code.trim().toLowerCase() ||
+          x.description.toLowerCase().includes(m.name.toLowerCase())
+      );
+      const inStock = g ? Number(g.fisik) || 0 : 0;
+      const neededQty = Number(m.qty) || 0;
+      if (inStock < neededQty) {
+        deficits.push({
+          name: m.name || m.code,
+          needed: neededQty,
+          inStock,
+          unit: m.unit || 'pcs',
+          deficit: neededQty - inStock
+        });
+      }
+    });
+    return deficits;
+  };
+
   const handleAddCategory = () => {
     if (!selectedCatName) {
-      showToast('Pilih kategori konstruksi', 'warn');
+      showToast('Pilih kategori konstruksi terlebih dahulu.', 'warning', 'Peringatan');
       return;
     }
     if (selectedCatQty <= 0) {
-      showToast('Qty harus lebih dari 0', 'warn');
+      showToast('Qty harus lebih dari 0.', 'warning', 'Peringatan');
       return;
     }
     if (!surveyDraft) return;
 
-    const nextSelections = [
-      ...surveyDraft.standardSelections,
-      { name: selectedCatName, qty: selectedCatQty, note: selectedCatNote }
-    ];
-    const nextMaterials = recalculateMaterials(nextSelections);
+    const stockInfo = checkStandardStock(selectedCatName, selectedCatQty);
 
-    setSurveyDraft({
-      ...surveyDraft,
-      standardSelections: nextSelections,
-      materials: nextMaterials,
-    });
-    setCatModalOpen(false);
-    setSelectedCatName('');
-    setSelectedCatQty(1);
-    setSelectedCatNote('');
-    showToast(`Kategori ${selectedCatName} (Qty: ${selectedCatQty}) berhasil ditambahkan.`, 'success', 'Kategori Ditambahkan');
+    // Strict Rule: Jika di menu STD Konstruksi belum menambahkan qty atau qty masih 0:
+    if (!stockInfo.hasMaterials || stockInfo.totalQty <= 0) {
+      setCategoryConfirm({
+        isOpen: true,
+        title: '⛔ Kategori Tidak Dapat Digunakan (Qty Masih 0)',
+        message: `Kategori konstruksi "${selectedCatName}" belum memiliki kuantitas material atau seluruh kuantitasnya masih 0 di menu STD KONSTRUKSI (Master Matriks TM). Kategori ini TIDAK BISA dipesan/digunakan. Silakan masukkan kuantitas material terlebih dahulu di menu STD KONSTRUKSI.`,
+        items: [],
+        confirmText: 'Buka Menu Std Konstruksi',
+        cancelText: 'Kembali',
+        variant: 'danger',
+        onConfirm: () => {
+          setCategoryConfirm(prev => ({ ...prev, isOpen: false }));
+          setCatModalOpen(false);
+          setIsWizardOpen(false);
+          setMainMenuTab('standards');
+          showToast(`Membuka menu STD KONSTRUKSI. Silakan isi kuantitas material untuk kategori "${selectedCatName}".`, 'info', 'Navigasi');
+        }
+      });
+      return;
+    }
+
+    const applyAdd = () => {
+      const nextSelections = [
+        ...surveyDraft.standardSelections,
+        { name: selectedCatName, qty: selectedCatQty, note: selectedCatNote }
+      ];
+      const nextMaterials = recalculateMaterials(nextSelections);
+
+      setSurveyDraft({
+        ...surveyDraft,
+        standardSelections: nextSelections,
+        materials: nextMaterials,
+      });
+      setCatModalOpen(false);
+      setSelectedCatName('');
+      setSelectedCatQty(1);
+      setSelectedCatNote('');
+      showToast(`Kategori ${selectedCatName} (${selectedCatQty} unit) berhasil ditambahkan ke survey.`, 'success', 'Kategori Ditambahkan');
+    };
+
+    // Case 2: Ada barang yang stoknya 0 atau kurang di gudang
+    if (stockInfo.outOfStockItems.length > 0) {
+      setCategoryConfirm({
+        isOpen: true,
+        title: 'Peringatan: Stok Material Gudang Defisit / Kosong',
+        message: `Terdapat ${stockInfo.outOfStockItems.length} komponen material untuk kategori "${selectedCatName}" yang stok fisiknya KOSONG atau KURANG di Gudang. Data survey akan tetap tersimpan dan kebutuhan material ini akan dicatat ke monitoring pengadaan / Daftung. Tetap tambahkan?`,
+        items: stockInfo.outOfStockItems.map(i => ({
+          name: i.description,
+          needed: i.needed,
+          inStock: i.inStock,
+          unit: i.unit
+        })),
+        confirmText: 'Tetap Tambahkan Kategori',
+        cancelText: 'Batal',
+        variant: 'warning',
+        onConfirm: () => {
+          setCategoryConfirm(prev => ({ ...prev, isOpen: false }));
+          applyAdd();
+        }
+      });
+      return;
+    }
+
+    // Semua barang aman tersedia
+    applyAdd();
   };
 
   const handleRemoveCategory = (index: number) => {
@@ -239,19 +428,8 @@ export const SurveyModule: React.FC = () => {
     }
   };
 
-  const handleSubmitSurvey = async () => {
+  const executeFinalSubmit = async () => {
     if (!surveyDraft) return;
-    if (!surveyDraft.customer.name) {
-      showToast('Nama pelanggan wajib diisi sebelum submit survey.', 'warning', 'Perhatian');
-      setCurrentStep(0);
-      return;
-    }
-    if (!surveyDraft.standardSelections.length) {
-      showToast('Pilih minimal 1 kategori konstruksi TM pada Langkah 4.', 'warning', 'Perhatian');
-      setCurrentStep(3);
-      return;
-    }
-
     try {
       setIsSaving(true);
       await saveSurvey({
@@ -270,6 +448,36 @@ export const SurveyModule: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSubmitSurvey = async () => {
+    if (!surveyDraft) return;
+    if (!surveyDraft.customer.name) {
+      showToast('Nama pelanggan wajib diisi sebelum submit survey.', 'warning', 'Perhatian');
+      setCurrentStep(0);
+      return;
+    }
+    if (!surveyDraft.standardSelections.length) {
+      showToast('Pilih minimal 1 kategori konstruksi TM pada Langkah 4.', 'warning', 'Perhatian');
+      setCurrentStep(3);
+      return;
+    }
+
+    // Check if any required material has 0 or deficit stock in warehouse
+    const deficits = getSurveyDeficitMaterials(surveyDraft.materials);
+    if (deficits.length > 0) {
+      setSubmitStockConfirm({
+        isOpen: true,
+        deficitItems: deficits,
+        onConfirm: () => {
+          setSubmitStockConfirm(prev => ({ ...prev, isOpen: false }));
+          executeFinalSubmit();
+        }
+      });
+      return;
+    }
+
+    await executeFinalSubmit();
   };
 
   const handleExportExcel = () => {
@@ -539,16 +747,30 @@ export const SurveyModule: React.FC = () => {
                         <span>Detail</span>
                       </button>
 
-                      {s.status === 'Selesai' && !s.daftungId && (
+                      {s.status === 'Selesai' && !s.daftungId ? (
                         <button
                           type="button"
-                          onClick={() => moveSurveyToDaftung(s.id)}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors flex items-center gap-1 text-[11px] shadow-xs"
+                          disabled={movingSurveyId === s.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRequestMoveToDaftung(s);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors flex items-center gap-1 text-[11px] shadow-xs disabled:opacity-50 cursor-pointer"
+                          title="Masukkan data survey ini ke Daftar Tunggu"
                         >
-                          <UserCheck className="w-3 h-3" />
+                          {movingSurveyId === s.id ? (
+                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <UserCheck className="w-3 h-3" />
+                          )}
                           <span>Masukkan Daftung</span>
                         </button>
-                      )}
+                      ) : s.daftungId ? (
+                        <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>Di Daftung ({s.daftungId})</span>
+                        </span>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -958,31 +1180,63 @@ export const SurveyModule: React.FC = () => {
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 sticky top-0">
                           <th className="p-2.5">Material</th>
-                          <th className="p-2.5 text-center w-24">Qty Hasil</th>
-                          <th className="p-2.5 text-center w-20">Satuan</th>
+                          <th className="p-2.5 text-center w-20">Qty Hasil</th>
+                          <th className="p-2.5 text-center w-16">Satuan</th>
+                          <th className="p-2.5 text-center w-24">Stok Gudang</th>
+                          <th className="p-2.5 text-center w-28">Status Stok</th>
                           <th className="p-2.5">Sumber Kategori</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {surveyDraft.materials.map((m, idx) => (
-                          <tr key={idx}>
-                            <td className="p-2.5">
-                              <div className="font-bold text-slate-800">{m.code}</div>
-                              <div className="text-[10px] text-slate-400">{m.name}</div>
-                            </td>
-                            <td className="p-2.5 text-center font-bold font-mono text-pln-700">{m.qty}</td>
-                            <td className="p-2.5 text-center text-slate-500">{m.unit}</td>
-                            <td className="p-2.5">
-                              <div className="flex flex-wrap gap-1">
-                                {m.sourceStandards?.map(st => (
-                                  <span key={st} className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-semibold text-slate-600">
-                                    {st}
+                        {surveyDraft.materials.map((m, idx) => {
+                          const g = gudang.find(
+                            x =>
+                              String(x.material).trim().toLowerCase() === m.code.trim().toLowerCase() ||
+                              x.description.toLowerCase().includes(m.name.toLowerCase())
+                          );
+                          const inStock = g ? Number(g.fisik) || 0 : 0;
+                          const mQty = Number(m.qty) || 0;
+                          const isDeficit = inStock < mQty;
+                          const isZero = inStock <= 0;
+
+                          return (
+                            <tr key={idx} className={isDeficit ? 'bg-amber-50/40' : ''}>
+                              <td className="p-2.5">
+                                <div className="font-bold text-slate-800">{m.code}</div>
+                                <div className="text-[10px] text-slate-400">{m.name}</div>
+                              </td>
+                              <td className="p-2.5 text-center font-bold font-mono text-pln-700">{mQty}</td>
+                              <td className="p-2.5 text-center text-slate-500">{m.unit}</td>
+                              <td className="p-2.5 text-center font-mono font-bold text-slate-700">
+                                {inStock} {m.unit}
+                              </td>
+                              <td className="p-2.5 text-center">
+                                {isZero ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold">
+                                    ✕ Kosong
                                   </span>
-                                ))}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                                ) : isDeficit ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                                    ⚠️ Defisit {mQty - inStock}
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                                    ✓ Tersedia
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2.5">
+                                <div className="flex flex-wrap gap-1">
+                                  {m.sourceStandards?.map(st => (
+                                    <span key={st} className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-semibold text-slate-600">
+                                      {st}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1026,9 +1280,27 @@ export const SurveyModule: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
-                  Total <b>{surveyDraft.materials.length} material</b> telah dihitung secara presisi berdasarkan standar konstruksi TM. Setelah disubmit, admin dapat memasukkan pelanggan ini ke Daftung untuk diterbitkan Work Order.
-                </div>
+                {(() => {
+                  const deficits = getSurveyDeficitMaterials(surveyDraft.materials);
+                  if (deficits.length > 0) {
+                    return (
+                      <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1.5">
+                        <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                          <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          <span>Peringatan: {deficits.length} Material Defisit di Gudang</span>
+                        </div>
+                        <p className="text-slate-600 text-[11px]">
+                          Terdapat material yang stok fisiknya tidak mencukupi di gudang. Saat survey diselesaikan, kekurangan material akan dicatat otomatis di modul <b>Kebutuhan Material</b> & <b>Daftung</b> untuk diproses ke pengadaan / PO.
+                        </p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
+                      Total <b>{surveyDraft.materials.length} material</b> telah dihitung secara presisi berdasarkan standar konstruksi TM dan seluruh stok fisik tersedia di Gudang. Setelah disubmit, admin dapat memasukkan pelanggan ini ke Daftung untuk diterbitkan Work Order.
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -1041,24 +1313,34 @@ export const SurveyModule: React.FC = () => {
           isOpen={catModalOpen}
           onClose={() => setCatModalOpen(false)}
           title="Pilih Kategori Standard Konstruksi"
-          footer={
-            <>
-              <button
-                type="button"
-                onClick={() => setCatModalOpen(false)}
-                className="px-4 py-2 rounded-xl border text-xs font-bold text-slate-600 hover:bg-slate-50"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleAddCategory}
-                className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700"
-              >
-                Tambahkan
-              </button>
-            </>
-          }
+          footer={(() => {
+            const currentStock = selectedCatName ? checkStandardStock(selectedCatName, selectedCatQty) : null;
+            const isBlocked = selectedCatName ? (!currentStock?.hasMaterials || (currentStock?.totalQty ?? 0) <= 0) : true;
+
+            return (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCatModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isBlocked}
+                  onClick={handleAddCategory}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                    isBlocked
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-200'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                  }`}
+                >
+                  Tambahkan
+                </button>
+              </>
+            );
+          })()}
         >
           <div className="space-y-4">
             <div>
@@ -1069,11 +1351,15 @@ export const SurveyModule: React.FC = () => {
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-white"
               >
                 <option value="">-- Pilih Kategori --</option>
-                {standards.map(s => (
-                  <option key={s.id} value={s.name}>
-                    {s.name} {s.active ? '' : '(Nonaktif)'}
-                  </option>
-                ))}
+                {standards.map(s => {
+                  const sStock = checkStandardStock(s.name, 1);
+                  const isZero = !sStock.hasMaterials || sStock.totalQty <= 0;
+                  return (
+                    <option key={s.id} value={s.name} className={isZero ? 'text-rose-600 font-normal' : ''}>
+                      {s.name} {isZero ? '⚠️ (Qty Masih 0 di Std Konstruksi)' : s.active ? '' : '(Nonaktif)'}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -1099,6 +1385,84 @@ export const SurveyModule: React.FC = () => {
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
               />
             </div>
+
+            {/* Real-time Material & Stock Availability Preview */}
+            {selectedCatName && (() => {
+              const previewStock = checkStandardStock(selectedCatName, selectedCatQty);
+              const isZero = !previewStock.hasMaterials || previewStock.totalQty <= 0;
+
+              return (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700">Status Ketersediaan Material:</span>
+                    {isZero ? (
+                      <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-bold">
+                        ⛔ Qty Belum Diisi di Std Konstruksi
+                      </span>
+                    ) : previewStock.outOfStockItems.length > 0 ? (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                        ⚠️ {previewStock.outOfStockItems.length} Defisit di Gudang
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                        ✓ Semua Tersedia
+                      </span>
+                    )}
+                  </div>
+
+                  {isZero ? (
+                    <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+                      <div className="flex items-center gap-1.5 text-rose-700 font-bold text-xs">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>Kategori Belum Bisa Digunakan (Qty Masih 0)</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        Kategori <b>"{selectedCatName}"</b> belum memiliki rincian kuantitas material atau seluruh kuantitasnya masih 0 di menu <b>STD KONSTRUKSI (Master Matriks TM)</b>. Kategori ini <b>tidak bisa dipesan / digunakan</b> sebelum Anda memasukkan qty materialnya di menu STD KONSTRUKSI.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCatModalOpen(false);
+                          setIsWizardOpen(false);
+                          setMainMenuTab('standards');
+                          showToast(`Membuka menu STD KONSTRUKSI. Silakan masukkan kuantitas material untuk kategori "${selectedCatName}".`, 'info', 'Panduan Master Matriks');
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] flex items-center gap-1.5 transition-colors shadow-xs"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Buka Menu STD KONSTRUKSI Sekarang</span>
+                      </button>
+                    </div>
+                  ) : previewStock.outOfStockItems.length > 0 ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+                      <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Material berikut stoknya kurang atau kosong di Gudang:</span>
+                      </div>
+                      <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                        {previewStock.outOfStockItems.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between bg-white/90 p-2 rounded-lg border border-amber-200 text-xs">
+                            <div>
+                              <div className="font-bold text-slate-800">{item.description}</div>
+                              <div className="text-[10px] text-slate-500 font-mono">Kode: {item.matName}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-rose-600 font-bold">Butuh: {item.needed} {item.unit}</div>
+                              <div className="text-[10px] text-slate-500 font-medium">Stok: {item.inStock} {item.unit}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-1.5">
+                      <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Semua material komponen ({previewStock.items.length} item) tersedia lengkap di Gudang.</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </Modal>
       )}
@@ -1146,19 +1510,26 @@ export const SurveyModule: React.FC = () => {
           footer={
             <div className="flex flex-wrap items-center justify-between gap-3 w-full">
               <div className="flex items-center gap-2">
-                {detailSurvey.status === 'Selesai' && !detailSurvey.daftungId && (
+                {detailSurvey.status === 'Selesai' && !detailSurvey.daftungId ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      moveSurveyToDaftung(detailSurvey.id);
-                      setDetailSurvey(null);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all"
+                    disabled={movingSurveyId === detailSurvey.id}
+                    onClick={() => handleRequestMoveToDaftung(detailSurvey)}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all disabled:opacity-50 cursor-pointer"
                   >
-                    <UserCheck className="w-4 h-4" />
+                    {movingSurveyId === detailSurvey.id ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <UserCheck className="w-4 h-4" />
+                    )}
                     <span>Masukkan ke Daftung</span>
                   </button>
-                )}
+                ) : detailSurvey.daftungId ? (
+                  <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Telah Masuk Daftung: {detailSurvey.daftungId}</span>
+                  </span>
+                ) : null}
 
                 <button
                   type="button"
@@ -1357,6 +1728,96 @@ export const SurveyModule: React.FC = () => {
         confirmText="Ya, Hapus"
         cancelText="Batal"
       />
+
+      {/* Move to Daftung Confirm Dialog */}
+      {daftungConfirm.isOpen && daftungConfirm.survey && (
+        <ConfirmDialog
+          isOpen={daftungConfirm.isOpen}
+          onClose={() => setDaftungConfirm({ isOpen: false, survey: null })}
+          onConfirm={handleConfirmMoveToDaftung}
+          title="Konfirmasi Masukkan ke Daftung"
+          message={`Apakah Anda yakin ingin memproses data survey "${daftungConfirm.survey.customer.name}" (${daftungConfirm.survey.id}) ke dalam antrean Daftar Tunggu (Daftung)? Tindakan ini hanya dapat dilakukan satu kali.`}
+          confirmText="Ya, Masukkan ke Daftung"
+          cancelText="Batal"
+          variant="info"
+          loading={movingSurveyId === daftungConfirm.survey.id}
+        />
+      )}
+
+      {/* Category Stock Warning Confirm Dialog */}
+      {categoryConfirm.isOpen && (
+        <ConfirmDialog
+          isOpen={categoryConfirm.isOpen}
+          onClose={() => setCategoryConfirm(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={categoryConfirm.onConfirm}
+          title={categoryConfirm.title}
+          message={categoryConfirm.message}
+          confirmText={categoryConfirm.confirmText || 'Tetap Tambahkan Kategori'}
+          cancelText={categoryConfirm.cancelText || 'Batal'}
+          variant={categoryConfirm.variant || 'warning'}
+        >
+          {categoryConfirm.items && categoryConfirm.items.length > 0 && (
+            <div className="border border-amber-200 rounded-xl overflow-hidden mt-2 max-h-40 overflow-y-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-amber-100/70 text-amber-900 font-bold">
+                  <tr>
+                    <th className="p-2">Material</th>
+                    <th className="p-2 text-center w-20">Dibutuhkan</th>
+                    <th className="p-2 text-center w-20">Stok Gudang</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-amber-100 bg-white">
+                  {categoryConfirm.items.map((it, idx) => (
+                    <tr key={idx}>
+                      <td className="p-2 font-medium text-slate-800">{it.name}</td>
+                      <td className="p-2 text-center font-bold text-rose-600">{it.needed} {it.unit}</td>
+                      <td className="p-2 text-center text-slate-500 font-bold">{it.inStock} {it.unit}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </ConfirmDialog>
+      )}
+
+      {/* Submit Stock Deficit Confirm Dialog */}
+      {submitStockConfirm.isOpen && (
+        <ConfirmDialog
+          isOpen={submitStockConfirm.isOpen}
+          onClose={() => setSubmitStockConfirm(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={submitStockConfirm.onConfirm}
+          title="Konfirmasi Submit Survey - Stok Gudang Defisit"
+          message={`Terdapat ${submitStockConfirm.deficitItems.length} item material yang stok fisiknya tidak mencukupi di gudang. Anda tetap dapat menyelesaikan survey ini. Kekurangan stok akan dicatat otomatis di modul Kebutuhan Material & Daftung untuk diteruskan ke pengadaan material.`}
+          confirmText="Ya, Selesaikan & Submit Survey"
+          cancelText="Kembali Cek Data"
+          variant="warning"
+          loading={isSaving}
+        >
+          <div className="border border-amber-200 rounded-xl overflow-hidden mt-2 max-h-48 overflow-y-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-amber-100/70 text-amber-900 font-bold">
+                <tr>
+                  <th className="p-2">Nama Material</th>
+                  <th className="p-2 text-center w-20">Kebutuhan</th>
+                  <th className="p-2 text-center w-20">Stok Fisik</th>
+                  <th className="p-2 text-center w-20">Defisit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-100 bg-white">
+                {submitStockConfirm.deficitItems.map((it, idx) => (
+                  <tr key={idx}>
+                    <td className="p-2 font-medium text-slate-800">{it.name}</td>
+                    <td className="p-2 text-center font-bold text-slate-800">{it.needed} {it.unit}</td>
+                    <td className="p-2 text-center text-slate-500 font-mono">{it.inStock} {it.unit}</td>
+                    <td className="p-2 text-center font-bold text-rose-600 font-mono">-{it.deficit} {it.unit}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ConfirmDialog>
+      )}
     </div>
   );
 };

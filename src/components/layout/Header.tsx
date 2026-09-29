@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, RefreshCw, ChevronDown, Check, ShieldCheck, UserCheck } from 'lucide-react';
+import { Menu, RefreshCw, ChevronDown, Check, ShieldCheck, UserCheck, LogOut } from 'lucide-react';
 import { usePromotor } from '@/context/PromotorContext';
 import { UserRole } from '@/lib/types';
 
@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
-  const { activeTab, loading, isSyncing, refreshData, currentUser, switchRole, availableUsers } = usePromotor();
+  const { activeTab, loading, isSyncing, refreshData, currentUser, switchRole, availableUsers, logout } = usePromotor();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -80,6 +80,15 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Official PLN Logo Badge */}
+        <div className="hidden md:flex items-center gap-2 pr-2 border-r border-slate-200">
+          <img
+            src="/pln-logo.png"
+            alt="PLN UP3 Banten Selatan"
+            className="h-8 w-auto object-contain"
+          />
+        </div>
+
         {/* Sync Button */}
         <button
           type="button"
@@ -160,8 +169,21 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
                 })}
               </div>
 
-              <div className="px-4 py-2 border-t border-slate-100 bg-slate-50/60 text-[10px] text-slate-400">
-                💡 <strong>Catatan:</strong> Vendor tidak memiliki akun internal, melainkan mengakses via link khusus dari Pengawas.
+              <div className="p-2 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between">
+                <div className="text-[10px] text-slate-400">
+                  💡 <strong>Info:</strong> Akun Terotentikasi
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoleDropdownOpen(false);
+                    logout();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-colors border border-rose-200 shadow-2xs"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Keluar</span>
+                </button>
               </div>
             </div>
           )}

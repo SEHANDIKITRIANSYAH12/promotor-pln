@@ -14,9 +14,16 @@ import { GudangModule } from '@/components/modules/GudangModule';
 import { KontrakModule } from '@/components/modules/KontrakModule';
 import { KebMaterialModule } from '@/components/modules/KebMaterialModule';
 
+import { LoginPage } from '@/components/auth/LoginPage';
+
 export default function HomePage() {
-  const { activeTab, loading } = usePromotor();
+  const { activeTab, loading, isAuthenticated } = usePromotor();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // If not authenticated, show login page
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50/70 flex">
