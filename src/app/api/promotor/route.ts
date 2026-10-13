@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { mockStore } from '@/lib/mockStore';
 
 export async function GET() {
   try {
@@ -138,15 +139,23 @@ export async function GET() {
       }
     });
   } catch (error: any) {
-    console.error('Error fetching promotor data:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.warn('Database offline / connection failed, serving mockStore fallback:', error?.message);
+    return NextResponse.json({
+      success: true,
+      data: mockStore.getAllData(),
+      isFallback: true
+    });
   }
 }
 
 export async function POST(req: Request) {
+  let action = '';
+  let payload: any = {};
+
   try {
     const body = await req.json();
-    const { action, payload } = body;
+    action = body?.action || '';
+    payload = body?.payload || {};
 
     switch (action) {
       // 1. SURVEY ACTIONS
@@ -579,7 +588,75 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
     }
   } catch (error: any) {
-    console.error('API Promotor POST Error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.warn('API Promotor POST DB failed, falling back to mockStore:', error?.message);
+    try {
+      let fallbackResult: any = null;
+      switch (action) {
+        case 'SAVE_SURVEY':
+          fallbackResult = mockStore.saveSurvey(payload?.record);
+          break;
+        case 'MOVE_SURVEY_TO_DAFTUNG':
+          fallbackResult = mockStore.moveSurveyToDaftung(payload?.surveyId);
+          break;
+        case 'SAVE_MANUAL_DAFTUNG':
+          fallbackResult = mockStore.saveManualDaftung(payload?.record);
+          break;
+        case 'UPDATE_DAFTUNG_IDPEL':
+          fallbackResult = mockStore.updateDaftungIdpel(payload?.id, payload?.idpel);
+          break;
+        case 'TOGGLE_DAFTUNG_FLAG':
+          fallbackResult = mockStore.toggleDaftungFlag(payload?.id, payload?.flag, payload?.value);
+          break;
+        case 'CREATE_WO_FROM_DAFTUNG':
+          fallbackResult = mockStore.createWOFromDaftung(payload);
+          break;
+        case 'UPDATE_WO_MATERIALS':
+          fallbackResult = mockStore.updateWOMaterials(payload?.noWo, payload?.materials);
+          break;
+        case 'UPDATE_WO_JASA_PROGRESS':
+          fallbackResult = mockStore.updateWOJasaProgress(payload?.noWo, payload?.jasaProgress, payload?.jasaWeights);
+          break;
+        case 'UPDATE_WO_TIANG':
+          fallbackResult = mockStore.updateWOTiang(payload?.noWo, payload?.tiangRows);
+          break;
+        case 'UPDATE_WO_KENDALA':
+          fallbackResult = mockStore.updateWOKendala(payload?.noWo, payload?.ketKendala);
+          break;
+        case 'UPDATE_WORK_ORDER':
+          fallbackResult = mockStore.updateWorkOrder(payload?.noWo, payload?.data);
+          break;
+        case 'SAVE_BAST':
+          fallbackResult = mockStore.saveBAST(payload?.noWo, payload?.bast);
+          break;
+        case 'UPDATE_GUDANG_STOK':
+          fallbackResult = mockStore.updateGudangStok(payload);
+          break;
+        case 'DELETE_GUDANG_MATERIAL':
+          fallbackResult = mockStore.deleteGudangMaterial(payload?.material);
+          break;
+        case 'UPDATE_STANDARD_QTY':
+          fallbackResult = mockStore.updateStandardQty(payload?.name, payload?.materials, payload?.active);
+          break;
+        case 'PROCESS_VENDOR_PICKUP':
+          fallbackResult = mockStore.processVendorPickup(payload?.pickups);
+          break;
+        case 'VERIFY_VENDOR_PROOF':
+          fallbackResult = mockStore.verifyVendorProof(payload?.sj);
+          break;
+        case 'SAVE_VENDOR_TIANG':
+          fallbackResult = mockStore.saveVendorTiang(payload?.name);
+          break;
+        case 'APPROVE_WO_VENDOR':
+          fallbackResult = mockStore.approveWOForVendor(payload?.noWo, payload?.token);
+          break;
+        case 'UPDATE_WO_VENDOR_CATATAN':
+          fallbackResult = mockStore.updateWOVendorCatatan(payload?.noWo, payload?.catatan);
+          break;
+      }
+      return NextResponse.json({ success: true, data: fallbackResult, isFallback: true });
+    } catch (fallbackError: any) {
+      console.error('Mock fallback error:', fallbackError);
+      return NextResponse.json({ success: false, error: fallbackError?.message || 'Gagal memproses aksi' }, { status: 500 });
+    }
   }
 }

@@ -13,8 +13,20 @@ export interface ToastMessage {
   duration?: number;
 }
 
+export type ToastOptions = {
+  message: string;
+  type?: ToastType;
+  title?: string;
+  duration?: number;
+};
+
 interface ToastContextType {
-  showToast: (message: string, type?: ToastType, title?: string, duration?: number) => void;
+  showToast: (
+    messageOrOptions: string | ToastOptions,
+    type?: ToastType,
+    title?: string,
+    duration?: number
+  ) => void;
   removeToast: (id: string) => void;
 }
 
@@ -27,18 +39,40 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const showToast = useCallback((message: string, type: ToastType = 'success', title?: string, duration = 5000) => {
-    const id = `toast_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const newToast: ToastMessage = { id, message, type, title, duration };
+  const showToast = useCallback(
+    (
+      messageOrOptions: string | ToastOptions,
+      typeArg: ToastType = 'success',
+      titleArg?: string,
+      durationArg = 5000
+    ) => {
+      let message = '';
+      let type: ToastType = typeArg;
+      let title = titleArg;
+      let duration = durationArg;
 
-    setToasts(prev => [...prev, newToast]);
+      if (typeof messageOrOptions === 'object' && messageOrOptions !== null) {
+        message = messageOrOptions.message;
+        type = messageOrOptions.type || 'success';
+        title = messageOrOptions.title;
+        duration = messageOrOptions.duration ?? 5000;
+      } else {
+        message = messageOrOptions;
+      }
 
-    if (duration > 0) {
-      setTimeout(() => {
-        removeToast(id);
-      }, duration);
-    }
-  }, [removeToast]);
+      const id = `toast_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      const newToast: ToastMessage = { id, message, type, title, duration };
+
+      setToasts(prev => [...prev, newToast]);
+
+      if (duration > 0) {
+        setTimeout(() => {
+          removeToast(id);
+        }, duration);
+      }
+    },
+    [removeToast]
+  );
 
   return (
     <ToastContext.Provider value={{ showToast, removeToast }}>

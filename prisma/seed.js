@@ -366,6 +366,100 @@ async function main() {
     }
   });
 
+  // 8. Seed User Accounts for Login & RBAC
+  console.log('Seeding user accounts for login & RBAC...');
+  const SEED_USERS = [
+    {
+      id: 'usr_admin',
+      name: 'Budi Santoso, S.T.',
+      nip: '198503152010011001',
+      email: 'budi.santoso@pln.co.id',
+      password: 'admin',
+      role: 'superadmin',
+      roleTitle: 'Super Administrator / Manager ULP',
+      unit: 'PLN ULP Rangkasbitung',
+      avatar: '👨‍💼',
+      status: 'active',
+      phone: '0812-3456-7890'
+    },
+    {
+      id: 'usr_surveyor',
+      name: 'Ahmad Fauzi',
+      nip: '199207242015021002',
+      email: 'ahmad.fauzi@pln.co.id',
+      password: 'admin',
+      role: 'surveyor',
+      roleTitle: 'Petugas Survey Lapangan',
+      unit: 'PLN ULP Rangkasbitung',
+      avatar: '👷‍♂️',
+      status: 'active',
+      phone: '0813-2345-6789'
+    },
+    {
+      id: 'usr_pengawas',
+      name: 'Faisal Reza, S.T.',
+      nip: '198911042013031003',
+      email: 'faisal.reza@pln.co.id',
+      password: 'admin',
+      role: 'pengawas',
+      roleTitle: 'Pengawas Teknik Konstruksi & Jaringan',
+      unit: 'PLN ULP Rangkasbitung',
+      avatar: '🕵️‍♂️',
+      status: 'active',
+      phone: '0815-9876-5432'
+    },
+    {
+      id: 'usr_gudang',
+      name: 'Siti Rahmawati',
+      nip: '199405182018012004',
+      email: 'siti.rahmawati@pln.co.id',
+      password: 'admin',
+      role: 'admin_gudang',
+      roleTitle: 'Admin Logistik & Gudang',
+      unit: 'Gudang Rangkasbitung',
+      avatar: '📦',
+      status: 'active',
+      phone: '0817-1122-3344'
+    },
+    {
+      id: 'usr_manager',
+      name: 'Hendra Gunawan, S.T.',
+      nip: '198006122005011005',
+      email: 'hendra.gunawan@pln.co.id',
+      password: 'admin',
+      role: 'superadmin',
+      roleTitle: 'Assistant Manager Jaringan & Konstruksi',
+      unit: 'PLN UP3 Banten Selatan',
+      avatar: '👨‍💼',
+      status: 'active',
+      phone: '0811-9876-1234'
+    }
+  ];
+
+  if (prisma.user) {
+    for (const u of SEED_USERS) {
+      await prisma.user.upsert({
+        where: { id: u.id },
+        update: u,
+        create: u
+      }).catch(err => {
+        console.warn(`User ${u.id} upsert warning:`, err.message);
+      });
+    }
+  }
+
+  console.log('\n======================================================');
+  console.log('⚡ DAFTAR AKUN SEED UNTUK LOGIN (PROMOTOR V1.0):');
+  console.log('======================================================');
+  SEED_USERS.forEach((u, i) => {
+    console.log(`${i + 1}. [${u.role.toUpperCase()}] ${u.name}`);
+    console.log(`   NIP     : ${u.nip}`);
+    console.log(`   Email   : ${u.email}`);
+    console.log(`   Password: ${u.password}`);
+    console.log(`   Unit    : ${u.unit}`);
+    console.log('------------------------------------------------------');
+  });
+
   console.log('✓ Seeding complete!');
 }
 

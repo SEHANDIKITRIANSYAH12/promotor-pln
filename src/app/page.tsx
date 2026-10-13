@@ -13,6 +13,8 @@ import { VendorModule } from '@/components/modules/VendorModule';
 import { GudangModule } from '@/components/modules/GudangModule';
 import { KontrakModule } from '@/components/modules/KontrakModule';
 import { KebMaterialModule } from '@/components/modules/KebMaterialModule';
+import { AuditLogModule } from '@/components/modules/AuditLogModule';
+import { UserManagementModule } from '@/components/modules/UserManagementModule';
 
 import { LoginPage } from '@/components/auth/LoginPage';
 
@@ -53,6 +55,8 @@ export default function HomePage() {
               {activeTab === 'gudang' && <GudangModule />}
               {activeTab === 'contract' && <KontrakModule />}
               {activeTab === 'material' && <KebMaterialModule />}
+              {activeTab === 'audit' && <AuditLogModule />}
+              {activeTab === 'users' && <UserManagementModule />}
             </>
           )}
         </main>

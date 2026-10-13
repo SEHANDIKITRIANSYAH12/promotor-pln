@@ -7,7 +7,7 @@
 1. [Ringkasan Eksekutif & Tujuan Sistem](#1-ringkasan-eksekutif--tujuan-sistem)
 2. [Spesifikasi Teknis & Arsitektur Teknologi](#2-spesifikasi-teknis--arsitektur-teknologi)
 3. [Matriks Hak Akses Pengguna (Role-Based Access Control / RBAC)](#3-matriks-hak-akses-pengguna-role-based-access-control--rbac)
-4. [Spesifikasi 8 Modul Utama Aplikasi](#4-spesifikasi-8-modul-utama-aplikasi)
+4. [Spesifikasi 10 Modul Utama Aplikasi](#4-spesifikasi-10-modul-utama-aplikasi)
 5. [Entity Relationship Diagram (ERD) & Struktur Database](#5-entity-relationship-diagram-erd--struktur-database)
 6. [Diagram Alur Bisnis & Flowchart Operasional](#6-diagram-alur-bisnis--flowchart-operasional)
 7. [Panduan Penggunaan Langkah demi Langkah (User Guide)](#7-panduan-penggunaan-langkah-demi-langkah-user-guide)
@@ -61,6 +61,8 @@ Super Admin > Manager UP3/ULP > Spv Teknik > Surveyor > Admin Gudang > Pengawas 
 | **GUDANG** | ✏️ Kelola | 👁️ Lihat | 👁️ Lihat | ❌ Akses | ✏️ Kelola Stok | 👁️ Cek Stok | ❌ Akses |
 | **KONTRAK** | ✏️ Kelola | 👁️ Lihat | ✏️ Pantau | ❌ Akses | 👁️ Lihat | ❌ Akses | ❌ Akses |
 | **KEB MATERIAL** | ✏️ Kelola | 👁️ Lihat | ✏️ Analisis | ❌ Akses | ✏️ Analisis | ❌ Akses | ❌ Akses |
+| **AUDIT LOG** | ✏️ Kelola | 👁️ Lihat | ❌ Akses | ❌ Akses | ❌ Akses | ❌ Akses | ❌ Akses |
+| **KELOLA PENGGUNA** | ✏️ Kelola Penuh | ❌ Akses | ❌ Akses | ❌ Akses | ❌ Akses | ❌ Akses | ❌ Akses |
 
 *Keterangan:*  
 - ✏️ **Kelola**: Hak penuh tambah, edit, hapus, ekspor.  
@@ -69,7 +71,7 @@ Super Admin > Manager UP3/ULP > Spv Teknik > Surveyor > Admin Gudang > Pengawas 
 
 ---
 
-## 4. Spesifikasi 8 Modul Utama Aplikasi
+## 4. Spesifikasi 10 Modul Utama Aplikasi
 
 ### 1. 📐 Modul STD KONSTRUKSI (Master Matriks TM)
 - **Fungsi**: Pusat formula *Bill of Materials* (BOM) standar PLN untuk seluruh konstruksi Jaringan Tegangan Menengah (contoh: 1B, 2B, 3B, TM-1, TM-2, Cantilever, Portal, Guy Wire).
@@ -132,6 +134,25 @@ Super Admin > Manager UP3/ULP > Spv Teknik > Surveyor > Admin Gudang > Pengawas 
 - **Fitur Utama**:
   - Peringatan dini (*Early Warning Indicator*) jika terdapat material kritis bernilai minus.
   - Ekspor kalkulasi pengadaan untuk pengajuan PR/PO ke bagian Pengadaan PLN UP3.
+
+### 9. 🛡️ Modul AUDIT LOG (Rekam Jejak Aktivitas Transaksi)
+- **Fungsi**: Pencatatan jejak audit (*audit trail*) dan akuntabilitas seluruh aktivitas pengguna.
+- **Fitur Utama**:
+  - Pencatatan otomatis setiap aksi penting: login/logout, penambahan survei, penerbitan SPK/WO, penyesuaian stok gudang, verifikasi Surat Jalan, hingga pengesahan BAST.
+  - Filter interaktif berdasarkan rentang tanggal, jenis modul, nama pengguna, dan tingkat signifikansi (*Info, Sukses, Peringatan, Kritis*).
+  - Tampilan ganda: **Tabel Rinci** dan **Timeline Jejak Kronologis**.
+  - Fitur ekspor rekam jejak aktivitas ke format **CSV / Excel** untuk pelaporan audit kepatuhan.
+
+### 10. 👥 Modul KELOLA PENGGUNA (User Management & RBAC)
+- **Fungsi**: Manajemen data pegawai, otorisasi peran (*Role-Based Access Control*), dan kredensial login akun resmi PLN UP3 Banten Selatan.
+- **Fitur Utama**:
+  - Penambahan pengguna baru dengan NIP PLN (18 digit), email kedinasan (@pln.co.id), unit kerja, nomor kontak WhatsApp, dan kata sandi awal.
+  - Penugasan peran: *Super Admin, Surveyor Lapangan, Pengawas Teknik, Admin Logistik & Gudang*.
+  - Pengaktifan / penonaktifan akun secara instan (*Toggle Status Active/Inactive*).
+  - Reset kata sandi pengguna langsung oleh Super Administrator.
+  - Proteksi integritas: Pencegahan penghapusan atau penonaktifan akun diri sendiri yang sedang aktif dan akun Super Admin utama.
+  - Integrasi pencatatan otomatis ke dalam **Audit Log Module** untuk setiap penambahan, pembaruan, maupun penghapusan akun.
+  - Ekspor seluruh daftar pengguna ke format **Excel (.xlsx)** dan **PDF**.
 
 ---
 

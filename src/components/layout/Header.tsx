@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
-  const { activeTab, loading, isSyncing, refreshData, currentUser, switchRole, availableUsers, logout } = usePromotor();
+  const { activeTab, setActiveTab, loading, isSyncing, refreshData, currentUser, setCurrentUser, switchRole, availableUsers, logout, canAccessTab } = usePromotor();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -34,6 +34,8 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
     gudang: { title: 'GUDANG MATERIAL', subtitle: 'Monitoring stok fisik vs SAP & verifikasi Surat Jalan' },
     contract: { title: 'MANAJEMEN KONTRAK', subtitle: 'Kontrol pagu kontrak jasa & pelacakan material in-transit' },
     material: { title: 'KEBUTUHAN MATERIAL (KEB)', subtitle: 'Kalkulasi kekurangan stok riil vs total kebutuhan WO aktif' },
+    audit: { title: 'AUDIT LOG & AKTIVITAS', subtitle: 'Jejak rekam transaksi, riwayat perubahan & kepatuhan' },
+    users: { title: 'KELOLA PENGGUNA & RBAC', subtitle: 'Manajemen akun, kredensial, dan otorisasi hak akses sistem' },
   };
 
   const current = titleMap[activeTab] || { title: 'PROMOTOR V1.0', subtitle: 'Project Monitoring & Material Control' };
@@ -132,7 +134,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
 
               <div className="p-1 space-y-1">
                 {availableUsers.map(user => {
-                  const isSelected = user.role === currentUser.role;
+                  const isSelected = user.id === currentUser.id;
                   const badge = getRoleBadge(user.role);
 
                   return (
@@ -140,7 +142,12 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
                       key={user.id}
                       type="button"
                       onClick={() => {
-                        switchRole(user.role);
+                        setCurrentUser(user);
+                        localStorage.setItem('promotor_user_role', user.role);
+                        localStorage.setItem('promotor_auth_user', JSON.stringify(user));
+                        if (!canAccessTab(activeTab)) {
+                          switchRole(user.role);
+                        }
                         setRoleDropdownOpen(false);
                       }}
                       className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all ${

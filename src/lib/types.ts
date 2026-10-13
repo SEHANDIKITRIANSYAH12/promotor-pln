@@ -10,6 +10,10 @@ export interface UserProfile {
   roleTitle: string;
   unit: string;
   avatar?: string;
+  status?: 'active' | 'inactive';
+  phone?: string;
+  createdAt?: string;
+  lastLogin?: string;
 }
 
 export interface MaterialItem {
@@ -215,4 +219,22 @@ export interface VendorPickupItem {
   sj: string;
   verified: boolean;
   proofName?: string;
+}
+
+export type AuditModuleType = 'SURVEY' | 'DAFTUNG' | 'WORK_ORDER' | 'PENGAWASAN' | 'GUDANG' | 'KONTRAK' | 'STANDAR' | 'SYSTEM' | 'PENGGUNA';
+export type AuditLogSeverity = 'info' | 'success' | 'warning' | 'danger';
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  userAvatar?: string;
+  action: string;
+  module: AuditModuleType;
+  severity: AuditLogSeverity;
+  description: string;
+  metadata?: Record<string, any>;
+  ipAddress?: string;
 }

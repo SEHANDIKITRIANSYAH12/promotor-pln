@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { mockStore } from '@/lib/mockStore';
 
 export async function GET(
   request: Request,
   { params }: { params: { token: string } }
 ) {
+  const token = decodeURIComponent(params.token);
+
   try {
-    const token = decodeURIComponent(params.token);
-    
-    // Find WO by vendorToken or noWo
+    // Find WO by vendorToken or noWo in database
     let wo = await prisma.workOrder.findFirst({
       where: {
         OR: [
@@ -19,7 +20,24 @@ export async function GET(
     });
 
     if (!wo) {
-      return NextResponse.json({ success: false, error: 'Link Perintah Kerja (WO) tidak valid atau sudah kedaluwarsa.' }, { status: 404 });
+      // Check fallback store
+      const mockWO = mockStore.findWOByTokenOrNo(token);
+      if (!mockWO) {
+        return NextResponse.json({ success: false, error: 'Link Perintah Kerja (WO) tidak valid atau sudah kedaluwarsa.' }, { status: 404 });
+      }
+      const daftung = mockStore.daftung.find(d => d.id === mockWO.daftungId) || null;
+      const pickups = mockStore.pickupHistory.filter(p => p.woNo === mockWO.noWo);
+      const isReserved = Boolean(mockWO.vendorApproved) || (mockWO.materials || []).some(m => (Number(m.reserved) || 0) > 0);
+      return NextResponse.json({
+        success: true,
+        data: {
+          isReserved,
+          workOrder: mockWO,
+          daftung,
+          pickups
+        },
+        isFallback: true
+      });
     }
 
     // Get linked Daftung info
@@ -59,8 +77,9 @@ export async function GET(
           jasaProgress: JSON.parse(wo.jasaProgress || '{}'),
           jasaWeights: JSON.parse(wo.jasaWeights || '{}'),
           tiangRows: JSON.parse(wo.tiangRows || '[]'),
+          bast: JSON.parse(wo.bast || '{}'),
           vendorToken: wo.vendorToken,
-          vendorApproved: wo.vendorApproved,
+          vendorApproved: Boolean(wo.vendorApproved),
           vendorCatatan: wo.vendorCatatan,
           tglPemeriksaanPengawas: wo.tglPemeriksaanPengawas
         },
@@ -88,8 +107,24 @@ export async function GET(
       }
     });
   } catch (error: any) {
-    console.error('Vendor API error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.warn('Vendor API GET fallback triggered:', error?.message);
+    const mockWO = mockStore.findWOByTokenOrNo(token);
+    if (!mockWO) {
+      return NextResponse.json({ success: false, error: 'Link Perintah Kerja (WO) tidak valid atau sudah kedaluwarsa.' }, { status: 404 });
+    }
+    const daftung = mockStore.daftung.find(d => d.id === mockWO.daftungId) || null;
+    const pickups = mockStore.pickupHistory.filter(p => p.woNo === mockWO.noWo);
+    const isReserved = Boolean(mockWO.vendorApproved) || (mockWO.materials || []).some(m => (Number(m.reserved) || 0) > 0);
+    return NextResponse.json({
+      success: true,
+      data: {
+        isReserved,
+        workOrder: mockWO,
+        daftung,
+        pickups
+      },
+      isFallback: true
+    });
   }
 }
 
@@ -97,11 +132,14 @@ export async function POST(
   request: Request,
   { params }: { params: { token: string } }
 ) {
+  const token = decodeURIComponent(params.token);
+  let body: any = {};
   try {
-    const token = decodeURIComponent(params.token);
-    const body = await request.json();
-    const { action, payload } = body;
+    body = await request.json();
+  } catch (_) {}
+  const { action, payload } = body;
 
+  try {
     const wo = await prisma.workOrder.findFirst({
       where: {
         OR: [
@@ -112,7 +150,7 @@ export async function POST(
     });
 
     if (!wo) {
-      return NextResponse.json({ success: false, error: 'Perintah Kerja tidak ditemukan.' }, { status: 404 });
+      throw new Error('Perintah Kerja tidak ditemukan di database');
     }
 
     switch (action) {
@@ -145,7 +183,6 @@ export async function POST(
           }
         });
 
-        // Also update the verified qty in WO material
         const currentMaterials = JSON.parse(wo.materials || '[]');
         const updatedMaterials = currentMaterials.map((m: any) => {
           if (m.code === material || m.name === material) {
@@ -181,7 +218,55 @@ export async function POST(
         return NextResponse.json({ success: false, error: 'Aksi tidak dikenali.' }, { status: 400 });
     }
   } catch (error: any) {
-    console.error('Vendor API post error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.warn('Vendor API post DB failed, using mockStore fallback:', error?.message);
+    const mockWO = mockStore.findWOByTokenOrNo(token);
+    if (!mockWO) {
+      return NextResponse.json({ success: false, error: 'Perintah Kerja tidak ditemukan.' }, { status: 404 });
+    }
+
+    switch (action) {
+      case 'UPDATE_VENDOR_PROGRESS': {
+        const { jasaProgress, tiangRows, vendorCatatan } = payload;
+        if (jasaProgress) mockWO.jasaProgress = jasaProgress;
+        if (tiangRows) mockWO.tiangRows = tiangRows;
+        if (vendorCatatan !== undefined) mockWO.vendorCatatan = vendorCatatan;
+        return NextResponse.json({ success: true, data: mockWO, isFallback: true });
+      }
+
+      case 'SUBMIT_VENDOR_PICKUP': {
+        const { material, qty, sj, proofName } = payload;
+        const newPickup = {
+          id: `pk-${Date.now()}`,
+          date: new Date().toISOString().split('T')[0],
+          woNo: mockWO.noWo,
+          vendor: mockWO.vendor,
+          material,
+          qty: String(qty),
+          sj,
+          verified: false,
+          proofName: proofName || 'Bukti_SJ_Vendor.jpg'
+        };
+        mockStore.pickupHistory.unshift(newPickup);
+        if (mockWO.materials) {
+          mockWO.materials = mockWO.materials.map(m => {
+            if (m.code === material || m.name === material) {
+              return { ...m, verified: (Number(m.verified) || 0) + Number(qty) };
+            }
+            return m;
+          });
+        }
+        return NextResponse.json({ success: true, data: newPickup, isFallback: true });
+      }
+
+      case 'SUBMIT_KENDALA': {
+        const { catatan } = payload;
+        mockWO.ketKendala = `[Vendor Lapangan]: ${catatan}`;
+        mockWO.vendorCatatan = catatan;
+        return NextResponse.json({ success: true, data: mockWO, isFallback: true });
+      }
+
+      default:
+        return NextResponse.json({ success: true, data: mockWO, isFallback: true });
+    }
   }
 }

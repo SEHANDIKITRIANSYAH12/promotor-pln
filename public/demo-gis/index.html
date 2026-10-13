@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PLN GIS Pole & Cable Route Tracer (Standalone Demo Prototype)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+      z-index: 10;
+    }
+    .custom-pole-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      font-weight: 800;
+      color: white;
+      border: 2px solid white;
+      transition: transform 0.2s;
+    }
+    .custom-pole-icon:hover {
+      transform: scale(1.2);
+    }
+    .span-label {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(4px);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    .leaflet-popup-content-wrapper {
+      border-radius: 16px;
+      padding: 4px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden">
+
+  <!-- Top Navbar -->
+  <header class="bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between shrink-0 shadow-xs z-20">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-lg shadow-md shadow-blue-500/30">
+        ⚡
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-black text-slate-800 tracking-tight">PLN GIS Pole &amp; Cable Route Tracer</h1>
+          <span class="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Standalone Prototype Demo</span>
+        </div>
+        <p class="text-xs text-slate-400">Simulasi Pemetaan Jalur Bentang Tiang &amp; Kalkulasi Material Otomatis</p>
+      </div>
+    </div>
+
+    <!-- Actions & Stats Bar -->
+    <div class="flex items-center gap-2.5">
+      <button onclick="loadSampleRoute()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300/80 transition-all flex items-center gap-1.5 cursor-pointer">
+        <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i>
+        <span>Load Contoh Rute</span>
+      </button>
+
+      <button onclick="undoLastPole()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300/80 transition-all flex items-center gap-1.5 cursor-pointer">
+        <i data-lucide="undo-2" class="w-4 h-4"></i>
+        <span>Undo Tiang</span>
+      </button>
+
+      <button onclick="clearAllPoles()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        <span>Reset Peta</span>
+      </button>
+
+      <button onclick="openExportModal()" class="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/25 transition-all flex items-center gap-1.5 cursor-pointer">
+        <i data-lucide="file-check-2" class="w-4 h-4"></i>
+        <span>Kirim ke Survei PROMOTOR</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Work Area -->
+  <div class="flex-1 flex min-h-0 relative">
+
+    <!-- Left Floating Controls & Tool Palette -->
+    <div class="w-96 bg-white border-r border-slate-200/80 flex flex-col shrink-0 shadow-lg z-20 overflow-y-auto">
+      
+      <!-- Mode & Instruction Card -->
+      <div class="p-4 border-b border-slate-100 bg-slate-50/70">
+        <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <i data-lucide="mouse-pointer-click" class="w-3.5 h-3.5 text-blue-600"></i>
+          <span>Mode Interaksi Peta</span>
+        </div>
+        <div class="p-3 bg-blue-50/80 border border-blue-200/80 rounded-xl text-xs text-blue-950 space-y-1">
+          <p class="font-bold flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
+            Klik pada peta untuk menancapkan tiang
+          </p>
+          <p class="text-[11px] text-blue-700 leading-relaxed">
+            Garis kabel &amp; kalkulasi jarak antar-bentang (*span meter*) akan terhubung otomatis secara real-time.
+          </p>
+        </div>
+      </div>
+
+      <!-- Pole Type Selector -->
+      <div class="p-4 border-b border-slate-100 space-y-3">
+        <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+          <span>Tipe Standar Konstruksi</span>
+          <span class="text-[10px] text-slate-400 font-normal">Pilih sebelum klik peta</span>
+        </label>
+
+        <div class="grid grid-cols-2 gap-2" id="poleTypeContainer">
+          <!-- Dynamically populated or static radio cards -->
+          <button type="button" onclick="setSelectedType('TM-1')" class="pole-type-btn active p-2.5 rounded-xl border text-left transition-all bg-blue-50 border-blue-500 text-blue-900 shadow-xs" data-type="TM-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs">TM-1 (Tumpu)</span>
+              <span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-0.5">Tiang Lurus (Sudut 0°-5°)</p>
+          </button>
+
+          <button type="button" onclick="setSelectedType('TM-2')" class="pole-type-btn p-2.5 rounded-xl border border-slate-200 text-left transition-all hover:bg-slate-50 text-slate-700" data-type="TM-2">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs">TM-2 (Ganda)</span>
+              <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-0.5">Sudut Kecil (5°-15°)</p>
+          </button>
+
+          <button type="button" onclick="setSelectedType('TM-3')" class="pole-type-btn p-2.5 rounded-xl border border-slate-200 text-left transition-all hover:bg-slate-50 text-slate-700" data-type="TM-3">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs">TM-3 (Sudut)</span>
+              <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-0.5">Sudut Sedang (15°-30°)</p>
+          </button>
+
+          <button type="button" onclick="setSelectedType('TM-4')" class="pole-type-btn p-2.5 rounded-xl border border-slate-200 text-left transition-all hover:bg-slate-50 text-slate-700" data-type="TM-4">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs">TM-4 (Tarik Akhir)</span>
+              <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-0.5">Dead-End / Ujung Jalur</p>
+          </button>
+
+          <button type="button" onclick="setSelectedType('GARDU-PORTAL')" class="pole-type-btn col-span-2 p-2.5 rounded-xl border border-slate-200 text-left transition-all hover:bg-slate-50 text-slate-700" data-type="GARDU-PORTAL">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs">⚡ Gardu Portal 2 Tiang (200 kVA)</span>
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-0.5">Gardu Distribusi Trafo Pasang Luar</p>
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-time Summary Cards -->
+      <div class="p-4 border-b border-slate-100 space-y-3">
+        <div class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+          Kalkulasi Teknis Otomatis
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+            <div class="text-[10px] font-bold text-slate-400 uppercase">Jumlah Tiang</div>
+            <div class="text-xl font-black text-slate-800" id="statPoleCount">0 <span class="text-xs font-normal text-slate-400">btg</span></div>
+          </div>
+
+          <div class="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+            <div class="text-[10px] font-bold text-slate-400 uppercase">Panjang Bentangan</div>
+            <div class="text-xl font-black text-blue-600" id="statSpanDistance">0 <span class="text-xs font-normal text-slate-400">meter</span></div>
+          </div>
+        </div>
+
+        <div class="p-3 bg-emerald-50 border border-emerald-200/80 rounded-xl flex items-center justify-between">
+          <div>
+            <div class="text-[10px] font-bold text-emerald-800 uppercase">Estimasi Kabel + Lendutan (10%)</div>
+            <div class="text-base font-black text-emerald-700" id="statCableEst">0 Meter</div>
+          </div>
+          <i data-lucide="cable" class="w-6 h-6 text-emerald-600"></i>
+        </div>
+      </div>
+
+      <!-- Bill of Materials (BoQ) Breakdown -->
+      <div class="p-4 flex-1 space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            Bill of Quantity (BoQ)
+          </div>
+          <span class="text-[10px] px-2 py-0.5 bg-slate-100 rounded font-mono font-bold text-slate-600" id="boqItemCount">0 Items</span>
+        </div>
+
+        <div class="space-y-1.5" id="boqContainer">
+          <div class="text-center py-6 text-slate-400 text-xs font-medium">
+            Belum ada tiang diplot pada peta.<br>Silakan klik peta untuk memulai.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Map Viewport -->
+    <div class="flex-1 relative">
+      <div id="map"></div>
+
+      <!-- Floating Map Layer Switcher & GPS Button -->
+      <div class="absolute top-4 right-4 z-20 flex flex-col gap-2">
+        <div class="bg-white/90 backdrop-blur-md p-1.5 rounded-2xl shadow-lg border border-slate-200 flex items-center gap-1">
+          <button onclick="setMapLayer('osm')" id="btnLayerOsm" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-xs">
+            Peta Jalan
+          </button>
+          <button onclick="setMapLayer('satellite')" id="btnLayerSat" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900">
+            Satelit Foto
+          </button>
+        </div>
+
+        <button onclick="locateUserGPS()" class="bg-white/90 backdrop-blur-md p-2.5 rounded-2xl shadow-lg border border-slate-200 text-slate-700 hover:text-blue-600 flex items-center justify-center cursor-pointer" title="Posisikan ke GPS Saya">
+          <i data-lucide="crosshair" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Bottom Floating Pole List Chips -->
+      <div class="absolute bottom-6 left-6 right-6 z-20 pointer-events-none flex justify-center">
+        <div class="bg-slate-900/85 backdrop-blur-md border border-slate-700/80 px-4 py-2.5 rounded-2xl text-white shadow-2xl flex items-center gap-3 pointer-events-auto max-w-xl w-full overflow-x-auto" id="poleBreadcrumbs">
+          <div class="text-xs text-slate-400 shrink-0 font-medium">Alur Bentangan:</div>
+          <div class="flex items-center gap-1.5 text-xs font-bold" id="crumbsList">
+            <span class="text-slate-500 italic font-normal">Klik peta untuk menaruh Tiang 1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Payload Modal Simulation for PROMOTOR -->
+  <div id="exportModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-scale-up">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2.5 rounded-2xl bg-blue-50 text-blue-700">
+            <i data-lucide="layers" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-slate-800 text-sm">Payload Integrasi ke Form Survei PROMOTOR</h3>
+            <p class="text-[10px] text-slate-400">Data hasil tracing siap di-inject ke database survei &amp; kalkulasi gudang</p>
+          </div>
+        </div>
+        <button onclick="closeExportModal()" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-sm font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <p class="text-slate-600 leading-relaxed">
+          Berikut adalah struktur JSON yang dihasilkan dari plotting peta. Ketika surveyor menekan tombol <strong>Simpan Survei</strong>, data koordinat dan rincian tiang/kabel ini otomatis diteruskan ke modul <strong>DAFTUNG</strong> dan <strong>WORK ORDER</strong>:
+        </p>
+
+        <pre class="p-4 bg-slate-900 text-emerald-400 font-mono text-[11px] rounded-2xl overflow-x-auto max-h-64 leading-relaxed" id="jsonExportPreview"></pre>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+        <div class="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+          <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+          <span>Valid &amp; Siap Diintegrasikan</span>
+        </div>
+        <button onclick="closeExportModal()" class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer shadow-sm">
+          Tutup Preview
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Map Layers
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    });
+
+    const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Tiles © Esri'
+    });
+
+    // Default center: Rangkasbitung, Banten (PLN UP3 Banten Selatan territory)
+    const defaultCenter = [-6.3575, 106.2483];
+    const map = L.map('map', {
+      center: defaultCenter,
+      zoom: 17,
+      layers: [osmLayer]
+    });
+
+    function setMapLayer(type) {
+      if (type === 'satellite') {
+        map.removeLayer(osmLayer);
+        map.addLayer(satLayer);
+        document.getElementById('btnLayerSat').className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-xs';
+        document.getElementById('btnLayerOsm').className = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900';
+      } else {
+        map.removeLayer(satLayer);
+        map.addLayer(osmLayer);
+        document.getElementById('btnLayerOsm').className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-xs';
+        document.getElementById('btnLayerSat').className = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900';
+      }
+    }
+
+    function locateUserGPS() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            map.flyTo([lat, lng], 18);
+            L.circleMarker([lat, lng], { radius: 8, color: '#2563eb', fillColor: '#38bdf8', fillOpacity: 0.8 }).addTo(map).bindPopup('Posisi GPS Anda').openPopup();
+          },
+          () => alert('Gagal membaca GPS browser. Menggunakan posisi default Rangkasbitung.')
+        );
+      }
+    }
+
+    // State Variables
+    let selectedPoleType = 'TM-1';
+    let poles = [];
+    let polyline = null;
+    let spanMarkers = [];
+
+    function setSelectedType(type) {
+      selectedPoleType = type;
+      document.querySelectorAll('.pole-type-btn').forEach(btn => {
+        if (btn.dataset.type === type) {
+          btn.className = 'pole-type-btn active p-2.5 rounded-xl border text-left transition-all bg-blue-50 border-blue-500 text-blue-900 shadow-xs';
+        } else {
+          btn.className = 'pole-type-btn p-2.5 rounded-xl border border-slate-200 text-left transition-all hover:bg-slate-50 text-slate-700';
+        }
+      });
+    }
+
+    // Colors mapping per pole type
+    const poleColors = {
+      'TM-1': '#2563eb', // Blue
+      'TM-2': '#0284c7', // Sky
+      'TM-3': '#7c3aed', // Purple
+      'TM-4': '#dc2626', // Red
+      'GARDU-PORTAL': '#d97706' // Amber
+    };
+
+    // Calculate distance between two lat/lng in meters (Haversine formula)
+    function calcDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3; // Earth radius in meters
+      const phi1 = lat1 * Math.PI / 180;
+      const phi2 = lat2 * Math.PI / 180;
+      const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+      const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
+                Math.cos(phi1) * Math.cos(phi2) *
+                Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    // Create Leaflet custom icon
+    function createPoleIcon(index, type) {
+      const color = poleColors[type] || '#2563eb';
+      const label = type === 'GARDU-PORTAL' ? '⚡' : `T.${index + 1}`;
+      return L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div class="custom-pole-icon" style="background:${color}; width:28px; height:28px; font-size:10px;">${label}</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+    }
+
+    // Map Click Handler -> Add Pole
+    map.on('click', function(e) {
+      addPoleAt(e.latlng.lat, e.latlng.lng, selectedPoleType);
+    });
+
+    function addPoleAt(lat, lng, type) {
+      const index = poles.length;
+      const pole = {
+        id: `pole-${Date.now()}-${index}`,
+        name: type === 'GARDU-PORTAL' ? `Gardu Portal (G.${index + 1})` : `Tiang ${index + 1}`,
+        code: type === 'GARDU-PORTAL' ? `G.${index + 1}` : `T.${index + 1}`,
+        lat: Number(lat.toFixed(6)),
+        lng: Number(lng.toFixed(6)),
+        type: type,
+        marker: null
+      };
+
+      // Create Leaflet Marker
+      const marker = L.marker([lat, lng], {
+        icon: createPoleIcon(index, type),
+        draggable: true
+      }).addTo(map);
+
+      marker.bindPopup(`
+        <div class="text-xs p-1">
+          <div class="font-extrabold text-slate-800">${pole.name} (${pole.type})</div>
+          <div class="text-[10px] text-slate-500 font-mono mt-0.5">Lat: ${pole.lat}, Lng: ${pole.lng}</div>
+          <div class="mt-2 pt-1 border-t border-slate-100 flex items-center justify-between">
+            <span class="text-[10px] font-bold text-blue-600">Urutan #${index + 1}</span>
+            <button onclick="removePoleByIndex(${index})" class="text-[10px] font-bold text-rose-600 hover:underline">Hapus Tiang</button>
+          </div>
+        </div>
+      `);
+
+      // Drag event
+      marker.on('dragend', function(evt) {
+        const newPos = evt.target.getLatLng();
+        pole.lat = Number(newPos.lat.toFixed(6));
+        pole.lng = Number(newPos.lng.toFixed(6));
+        redrawRoute();
+      });
+
+      pole.marker = marker;
+      poles.push(pole);
+
+      redrawRoute();
+    }
+
+    function removePoleByIndex(index) {
+      if (poles[index]) {
+        map.removeLayer(poles[index].marker);
+        poles.splice(index, 1);
+        // Refresh markers icons
+        poles.forEach((p, idx) => {
+          p.marker.setIcon(createPoleIcon(idx, p.type));
+        });
+        redrawRoute();
+      }
+    }
+
+    function undoLastPole() {
+      if (poles.length > 0) {
+        const last = poles.pop();
+        map.removeLayer(last.marker);
+        redrawRoute();
+      }
+    }
+
+    function clearAllPoles() {
+      poles.forEach(p => map.removeLayer(p.marker));
+      poles = [];
+      redrawRoute();
+    }
+
+    // Redraw Polylines, Span Distance Labels & Recalculate BoQ
+    function redrawRoute() {
+      // Clear previous line
+      if (polyline) map.removeLayer(polyline);
+      spanMarkers.forEach(m => map.removeLayer(m));
+      spanMarkers = [];
+
+      if (poles.length === 0) {
+        document.getElementById('statPoleCount').innerHTML = `0 <span class="text-xs font-normal text-slate-400">btg</span>`;
+        document.getElementById('statSpanDistance').innerHTML = `0 <span class="text-xs font-normal text-slate-400">meter</span>`;
+        document.getElementById('statCableEst').innerText = `0 Meter`;
+        document.getElementById('boqItemCount').innerText = `0 Items`;
+        document.getElementById('boqContainer').innerHTML = `
+          <div class="text-center py-6 text-slate-400 text-xs font-medium">
+            Belum ada tiang diplot pada peta.<br>Silakan klik peta untuk memulai.
+          </div>
+        `;
+        document.getElementById('crumbsList').innerHTML = `<span class="text-slate-500 italic font-normal">Klik peta untuk menaruh Tiang 1</span>`;
+        return;
+      }
+
+      const latlngs = poles.map(p => [p.lat, p.lng]);
+      polyline = L.polyline(latlngs, {
+        color: '#2563eb',
+        weight: 4,
+        opacity: 0.85,
+        dashArray: '6, 8',
+        lineCap: 'round'
+      }).addTo(map);
+
+      // Calculate span distances
+      let totalDistance = 0;
+      for (let i = 0; i < poles.length - 1; i++) {
+        const p1 = poles[i];
+        const p2 = poles[i + 1];
+        const dist = calcDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+        totalDistance += dist;
+
+        // Middle coordinate for span label
+        const midLat = (p1.lat + p2.lat) / 2;
+        const midLng = (p1.lng + p2.lng) / 2;
+
+        const spanIcon = L.divIcon({
+          className: 'span-label-icon',
+          html: `<div class="span-label">${dist.toFixed(1)} m</div>`,
+          iconSize: [50, 20],
+          iconAnchor: [25, 10]
+        });
+
+        const spanMarker = L.marker([midLat, midLng], { icon: spanIcon, interactive: false }).addTo(map);
+        spanMarkers.push(spanMarker);
+      }
+
+      // Cable with 10% sag/lendutan
+      const cableEst = Math.ceil(totalDistance * 1.10);
+
+      // Update Header Stats
+      document.getElementById('statPoleCount').innerHTML = `${poles.length} <span class="text-xs font-normal text-slate-400">btg</span>`;
+      document.getElementById('statSpanDistance').innerHTML = `${totalDistance.toFixed(1)} <span class="text-xs font-normal text-slate-400">meter</span>`;
+      document.getElementById('statCableEst').innerText = `${cableEst} Meter`;
+
+      // Update Breadcrumbs
+      const crumbsHtml = poles.map((p, i) => `
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-200">
+          <span style="color:${poleColors[p.type]}">●</span> ${p.code} (${p.type})
+        </span>
+        ${i < poles.length - 1 ? '<span class="text-slate-500">→</span>' : ''}
+      `).join('');
+      document.getElementById('crumbsList').innerHTML = crumbsHtml;
+
+      // Calculate Bill of Quantities (BoQ) based on poles & cable
+      updateBoQ(totalDistance, cableEst);
+    }
+
+    function updateBoQ(totalDistance, cableEst) {
+      const boq = {};
+
+      // 1. Tiang Beton
+      const tiangBetonCount = poles.filter(p => p.type !== 'GARDU-PORTAL').length + (poles.filter(p => p.type === 'GARDU-PORTAL').length * 2);
+      if (tiangBetonCount > 0) {
+        boq['TIANG BETON 12M 350daN'] = { name: 'Tiang Beton 12M - 350 daN', qty: tiangBetonCount, unit: 'btg', cat: 'Tiang' };
+      }
+
+      // 2. Kabel JTM
+      if (cableEst > 0) {
+        boq['KABEL A3CS 150MM2'] = { name: 'Kabel A3CS 150 mm² (3 Fasa)', qty: cableEst * 3, unit: 'meter', cat: 'Kabel TM' };
+      }
+
+      // 3. Isolator Tumpu & Tarik per standard
+      let isolatorTumpu = 0;
+      let isolatorTarik = 0;
+      let trafoCount = 0;
+
+      poles.forEach(p => {
+        if (p.type === 'TM-1') isolatorTumpu += 3;
+        if (p.type === 'TM-2') isolatorTumpu += 6;
+        if (p.type === 'TM-3') { isolatorTumpu += 3; isolatorTarik += 3; }
+        if (p.type === 'TM-4') isolatorTarik += 3;
+        if (p.type === 'GARDU-PORTAL') { trafoCount += 1; isolatorTarik += 6; }
+      });
+
+      if (isolatorTumpu > 0) boq['ISOLATOR TUMPU 20KV'] = { name: 'Isolator Tumpu Pin-Post 20 kV', qty: isolatorTumpu, unit: 'set', cat: 'Aksesoris' };
+      if (isolatorTarik > 0) boq['ISOLATOR TARIK 20KV'] = { name: 'Isolator Tarik Suspension 20 kV', qty: isolatorTarik, unit: 'set', cat: 'Aksesoris' };
+      if (trafoCount > 0) boq['TRAFO 200KVA 20KV/400V'] = { name: 'Trafo Distribusi 200 kVA 3-Fasa', qty: trafoCount, unit: 'unit', cat: 'Gardu' };
+
+      const items = Object.values(boq);
+      document.getElementById('boqItemCount').innerText = `${items.length} Items`;
+
+      if (items.length === 0) {
+        document.getElementById('boqContainer').innerHTML = `
+          <div class="text-center py-6 text-slate-400 text-xs font-medium">
+            Belum ada tiang diplot pada peta.<br>Silakan klik peta untuk memulai.
+          </div>
+        `;
+        return;
+      }
+
+      const html = items.map(item => `
+        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
+          <div class="min-w-0 pr-2">
+            <div class="font-bold text-slate-800 truncate">${item.name}</div>
+            <div class="text-[10px] text-slate-400">${item.cat}</div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="font-mono font-black text-blue-600 text-sm">${item.qty.toLocaleString()}</div>
+            <div class="text-[10px] font-bold text-slate-400 uppercase">${item.unit}</div>
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('boqContainer').innerHTML = html;
+    }
+
+    // Sample Preset: Load Contoh Jalur di Rangkasbitung
+    function loadSampleRoute() {
+      clearAllPoles();
+      const samplePoints = [
+        { lat: -6.357200, lng: 106.247100, type: 'TM-4' },
+        { lat: -6.357420, lng: 106.247550, type: 'TM-1' },
+        { lat: -6.357680, lng: 106.248100, type: 'TM-3' },
+        { lat: -6.357850, lng: 106.248650, type: 'TM-1' },
+        { lat: -6.358050, lng: 106.249200, type: 'GARDU-PORTAL' }
+      ];
+
+      samplePoints.forEach(pt => {
+        addPoleAt(pt.lat, pt.lng, pt.type);
+      });
+
+      map.flyTo([-6.3576, 106.2481], 17);
+    }
+
+    // Export Modal
+    function openExportModal() {
+      if (poles.length === 0) {
+        alert('Silakan tancapkan minimal 1 tiang pada peta terlebih dahulu.');
+        return;
+      }
+
+      const totalDist = poles.reduce((sum, p, i) => {
+        if (i === 0) return 0;
+        return sum + calcDistance(poles[i-1].lat, poles[i-1].lng, p.lat, p.lng);
+      }, 0);
+
+      const payload = {
+        surveyInfo: {
+          idpel: "538291029102",
+          customerName: "PT Banten Makmur Sentosa",
+          totalPoles: poles.length,
+          totalSpanDistanceMeters: Math.round(totalDist),
+          estimatedCableMeters: Math.ceil(totalDist * 1.10),
+        },
+        routePoles: poles.map((p, idx) => ({
+          sequence: idx + 1,
+          code: p.code,
+          name: p.name,
+          standardType: p.type,
+          lat: p.lat,
+          lng: p.lng
+        })),
+        calculatedMaterials: [
+          { code: "TIANG-12M-350", name: "Tiang Beton 12M 350daN", qty: poles.length, unit: "btg" },
+          { code: "KABEL-A3CS-150", name: "Kabel A3CS 150mm2", qty: Math.ceil(totalDist * 1.10) * 3, unit: "meter" },
+          { code: "ISOLATOR-TUMPU", name: "Isolator Tumpu 20kV", qty: poles.length * 3, unit: "set" }
+        ]
+      };
+
+      document.getElementById('jsonExportPreview').textContent = JSON.stringify(payload, null, 2);
+      document.getElementById('exportModal').classList.remove('hidden');
+      document.getElementById('exportModal').classList.add('flex');
+    }
+
+    function closeExportModal() {
+      document.getElementById('exportModal').classList.add('hidden');
+      document.getElementById('exportModal').classList.remove('flex');
+    }
+
+    // Auto-load sample route on initial view for instant demo
+    setTimeout(loadSampleRoute, 600);
+  </script>
+</body>
+</html>

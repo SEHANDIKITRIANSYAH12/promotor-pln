@@ -144,3 +144,20 @@ model VendorPickupHistory {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  nip       String?  @unique
+  email     String?  @unique
+  password  String   @default("admin")
+  role      String   @default("surveyor") // superadmin | surveyor | pengawas | admin_gudang
+  roleTitle String?  @default("")
+  unit      String?  @default("")
+  avatar    String?  @default("👤")
+  status    String   @default("active")   // active | inactive
+  phone     String?  @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+

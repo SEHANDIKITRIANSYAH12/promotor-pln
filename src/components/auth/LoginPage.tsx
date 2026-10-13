@@ -2,10 +2,10 @@
 
 import React, { useState } from 'react';
 import { usePromotor } from '@/context/PromotorContext';
-import { Zap, Eye, EyeOff, AlertCircle, ShieldCheck } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { login, availableUsers } = usePromotor();
+  const { login } = usePromotor();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -33,12 +33,6 @@ export const LoginPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickFill = (user: typeof availableUsers[0]) => {
-    setIdentifier(user.nip || user.email || user.role);
-    setPassword(user.password || 'admin');
-    setErrorMsg('');
   };
 
   return (
@@ -151,32 +145,7 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Login Pill Presets for easy local testing */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Akun Uji Coba Cepat (Klik untuk Isi):
-            </p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {availableUsers.map(user => (
-                <button
-                  key={user.id}
-                  type="button"
-                  onClick={() => handleQuickFill(user)}
-                  className="flex items-center gap-1.5 p-2 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/60 text-left transition-all group"
-                >
-                  <span className="text-base">{user.avatar}</span>
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-bold text-slate-700 group-hover:text-blue-700 truncate">
-                      {user.name.split(',')[0]}
-                    </div>
-                    <div className="text-[10px] text-slate-400 truncate">{user.roleTitle.split('/')[0]}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <p className="text-xs text-slate-400 text-center mt-5">
+          <p className="text-xs text-slate-400 text-center mt-6">
             Belum punya akses? Hubungi admin unit Anda.
           </p>
 

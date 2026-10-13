@@ -13,7 +13,9 @@ import {
   BarChart3,
   Zap,
   Lock,
-  LogOut
+  LogOut,
+  History,
+  UserCog
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -23,7 +25,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) => {
-  const { activeTab, setActiveTab, daftung, surveys, workorders, currentUser, canAccessTab, logout } = usePromotor();
+  const { activeTab, setActiveTab, daftung, surveys, workorders, auditLogs, users, currentUser, canAccessTab, logout } = usePromotor();
 
   const allNavItems = [
     { id: 'std', label: 'STD KONSTRUKSI', icon: Layers, desc: 'Master Matriks TM' },
@@ -34,6 +36,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
     { id: 'gudang', label: 'GUDANG', icon: Warehouse, desc: 'Stok Fisik & SAP' },
     { id: 'contract', label: 'KONTRAK', icon: FileSignature, desc: 'Pagu Jasa & Material' },
     { id: 'material', label: 'KEB MATERIAL', icon: BarChart3, desc: 'Kalkulasi Kekurangan' },
+    { id: 'audit', label: 'AUDIT LOG', icon: History, desc: 'Jejak Rekam Aktivitas', count: auditLogs.length },
+    { id: 'users', label: 'KELOLA PENGGUNA', icon: UserCog, desc: 'Akun & Hak Akses', count: users.length },
   ];
 
   // Filter items based on active role permissions
