@@ -128,17 +128,93 @@ Pada unit distribusi PLN, koordinasi antara tim survei, perencana teknik, logist
 ### 🏗️ Diagram Arsitektur Sistem
 
 ```mermaid
-graph TD
-    Client[Browser Client / Next.js React UI] --> Context[PromotorContext State & Cache Hydration]
-    Context --> API[Next.js API Route /api/promotor]
-    API --> Prisma[Prisma ORM Client]
-    Prisma --> DB[(PostgreSQL Supabase)]
-    
-    API -.-> Fallback[MockStore Resilient Fallback]
-    Fallback -.-> DB_Offline[Graceful Degradation jika DB Terputus]
-    
-    Vendor[Vendor Rekanan Lapangan] --> VendorAPI[/api/vendor/:token]
-    VendorAPI --> Prisma
+flowchart TB
+    subgraph ACTORS["👥 PENGGUNA SISTEM & PERAN (RBAC)"]
+        A1["👨‍💼 Super Administrator / Manager ULP"]
+        A2["👷‍♂️ Surveyor Lapangan"]
+        A3["🕵️‍♂️ Pengawas Teknik Lapangan"]
+        A4["📦 Admin Gudang & Logistik"]
+        A5["🤝 Vendor Rekanan (Eksternal)"]
+    end
+
+    subgraph PRESENTATION["💻 PRESENTATION LAYER (Next.js 14 & Tailwind CSS)"]
+        subgraph AUTH_LAYER["Autentikasi & Otorisasi"]
+            LOGIN["LoginPage (NIP / Email & Password)"]
+            GUARD["RBAC Guard & Session Protection"]
+        end
+
+        subgraph MODULES["10 Modul Bisnis Utama PROMOTOR"]
+            M1["📐 1. Master STD Konstruksi TM"]
+            M2["📍 2. Survey Lapangan & Leaflet GIS"]
+            M3["⏳ 3. Daftung (Monitoring SLA & TMP)"]
+            M4["📋 4. Work Order (SPK & Kontrak Jasa)"]
+            M5["🔍 5. Pengawasan (Opname Tiang & BAST)"]
+            M6["🏢 6. Gudang (Stok Fisik vs SAP)"]
+            M7["📄 7. Manajemen Kontrak Jasa & Material"]
+            M8["📊 8. Kebutuhan Material (Kalkulasi Defisit)"]
+            M9["🛡️ 9. Audit Log (Jejak Rekam Aktivitas)"]
+            M10["👥 10. Kelola Pengguna (User Management)"]
+        end
+
+        subgraph REPORTING["Laporan & Ekspor Dokumen"]
+            EXP_EXCEL["Excel Generator (xlsx)"]
+            EXP_PDF["Official PDF Exporter (jsPDF)"]
+        end
+    end
+
+    subgraph STATE_LAYER["⚡ APPLICATION STATE & CACHE (React Context API)"]
+        CTX["PromotorContext (Central State Engine)"]
+        CACHE["Instant Cache Hydration (LocalStorage - 0ms Load)"]
+        SYNC_BG["Non-blocking Silent Background Sync"]
+    end
+
+    subgraph API_LAYER["🌐 SERVERLESS API LAYER (Next.js App Router)"]
+        API_MAIN["API Route: /api/promotor"]
+        API_VENDOR["API Route: /api/vendor/:token"]
+        FALLBACK["MockStore Resilient Fallback Engine"]
+    end
+
+    subgraph PERSISTENCE["🗄️ PERSISTENCE & INFRASTRUCTURE LAYER"]
+        PRISMA["Prisma ORM 5.x Singleton Client"]
+        
+        subgraph DB["PostgreSQL Database (Supabase Cloud)"]
+            T_STD[("standardKonstruksi")]
+            T_GUDANG[("gudangMaterial")]
+            T_SURVEY[("survey")]
+            T_DAFTUNG[("daftung")]
+            T_WO[("workOrder")]
+            T_KONTRAK[("kontrakJasa & kontrakMaterial")]
+            T_USER[("user (Akun Pegawai)")]
+            T_LOG[("auditLog (Jejak Transaksi)")]
+        end
+    end
+
+    %% Relasi Alur Sistem
+    A1 & A2 & A3 & A4 --> LOGIN --> GUARD
+    GUARD --> MODULES
+    A5 --> API_VENDOR
+
+    MODULES --> EXP_EXCEL & EXP_PDF
+    MODULES <--> CTX
+    CTX <--> CACHE
+    CTX --> SYNC_BG --> API_MAIN
+
+    API_MAIN --> PRISMA
+    API_VENDOR --> PRISMA
+    API_MAIN -. "Fallback jika DB Terputus" .-> FALLBACK
+
+    PRISMA <--> DB
+```
+
+### 🔄 Diagram Alur Bisnis Operasional (End-to-End Pipeline)
+
+```mermaid
+flowchart LR
+    S1["1. SURVEI LAPANGAN<br/>• Input IDPEL & Daya<br/>• Formula Matriks TM<br/>• Geotagging Peta GIS"] --> S2["2. DAFTUNG<br/>• Monitoring SLA TMP<br/>• Verifikasi NIDI/SLO<br/>• Antrean Pelanggan"]
+    S2 --> S3["3. WORK ORDER<br/>• Penomoran No WO<br/>• Penugasan Vendor<br/>• Alokasi Pagu Jasa"]
+    S3 --> S4["4. GUDANG & LOGISTIK<br/>• Verifikasi Surat Jalan<br/>• Cek Saldo SAP vs Fisik<br/>• Kontrak Pabrikan"]
+    S4 --> S5["5. PENGAWASAN FISIK<br/>• Opname Tiang Beton<br/>• Bobot 3 Pilar Progres<br/>• Portal Token Vendor"]
+    S5 --> S6["6. PENGESAHAN BAST<br/>• Pengesahan Berita Acara<br/>• Rekam Jejak Audit Log<br/>• Penyambungan Nyala"]
 ```
 
 ---
